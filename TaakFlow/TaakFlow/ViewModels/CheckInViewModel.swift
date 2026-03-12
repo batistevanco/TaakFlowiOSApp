@@ -9,7 +9,7 @@ import Observation
 class CheckInViewModel {
     // MARK: - Step state
     var currentStep: Int = 0
-    var totalSteps: Int = 4
+    var totalSteps: Int = 3
 
     // MARK: - Step 1 — Mood
     var selectedMoodScore: Int? = nil
@@ -31,10 +31,10 @@ class CheckInViewModel {
     // MARK: - Step 2 — Daily goal
     var dailyGoal: String = ""
 
-    // MARK: - Step 3 — Projects
+    // Legacy support for previously stored project selections.
     var selectedProjectIDs: Set<UUID> = []
 
-    // MARK: - Step 4 — Tasks
+    // MARK: - Step 3 — Tasks
     var plannedTaskTitle1: String = ""
     var plannedTaskTitle2: String = ""
     var plannedTaskTitle3: String = ""
@@ -66,7 +66,7 @@ class CheckInViewModel {
     }
 
     // MARK: - Save
-    func saveCheckIn(projects: [TFProject], context: ModelContext) {
+    func saveCheckIn(context: ModelContext) {
         let entry = CheckInEntry(
             moodScore: selectedMoodScore ?? 2,
             moodEmoji: selectedMoodEmoji,

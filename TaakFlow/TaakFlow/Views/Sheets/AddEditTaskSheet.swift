@@ -33,6 +33,7 @@ struct AddEditTaskSheet: View {
     @State private var newTagName: String = ""
     @State private var showNewTagInput: Bool = false
     @State private var newSubtaskTitle: String = ""
+    @State private var showMoreOptions: Bool = false
 
     private var isEditing: Bool { existingTask != nil }
     private var isValid: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -73,35 +74,6 @@ struct AddEditTaskSheet: View {
                         )
                         .padding(.horizontal, TFSpacing.lg)
 
-                    // MARK: Notes
-                    VStack(alignment: .leading, spacing: TFSpacing.sm) {
-                        if showNotes {
-                            TextField("Notitie...", text: $notes, axis: .vertical)
-                                .font(.tfBody())
-                                .foregroundColor(.tfTextPrimary)
-                                .lineLimit(3...8)
-                                .padding(TFSpacing.md)
-                                .background(Color.tfBgSubtle)
-                                .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
-                        } else {
-                            Button(action: { withAnimation { showNotes = true } }) {
-                                HStack {
-                                    Image(systemName: "note.text")
-                                        .font(.system(size: 14))
-                                    Text("Notitie toevoegen...")
-                                        .font(.tfBody())
-                                }
-                                .foregroundColor(.tfTextSecondary)
-                                .padding(TFSpacing.md)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.tfBgSubtle)
-                                .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(.horizontal, TFSpacing.lg)
-
                     // MARK: Priority
                     formSection(title: "Prioriteit") {
                         HStack(spacing: TFSpacing.sm) {
@@ -132,9 +104,8 @@ struct AddEditTaskSheet: View {
                     }
 
                     // MARK: Due date
-                    formSection(title: "Vervaldatum") {
+                    formSection(title: "Datum") {
                         VStack(spacing: TFSpacing.sm) {
-                            // Toggle row
                             HStack {
                                 Image(systemName: "calendar")
                                     .foregroundColor(.tfAccent)
@@ -162,211 +133,30 @@ struct AddEditTaskSheet: View {
                                     .animation(.spring(response: 0.4, dampingFraction: 0.7), value: showDatePicker)
                             }
 
-                            if hasDueDate {
-                                HStack {
-                                    Image(systemName: "clock")
-                                        .foregroundColor(.tfAccent)
-                                        .font(.system(size: 14))
-                                    Text("Tijd instellen")
-                                        .font(.tfSubheadline())
-                                        .foregroundColor(.tfTextSecondary)
-                                    Spacer()
-                                    CustomToggle(isOn: $hasDueTime)
-                                }
-                                .padding(TFSpacing.md)
-                                .background(Color.tfBgSubtle)
-                                .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
-
-                                if hasDueTime {
-                                    DatePicker("", selection: $dueTime, displayedComponents: .hourAndMinute)
-                                        .datePickerStyle(.wheel)
-                                        .labelsHidden()
-                                        .tint(.tfAccent)
-                                        .frame(maxWidth: .infinity)
-                                        .transition(.move(edge: .top).combined(with: .opacity))
-                                }
-                            }
                         }
                     }
 
-                    // MARK: Time block
-                    formSection(title: "Tijdblok") {
+                    Button(action: toggleMoreOptions) {
                         HStack(spacing: TFSpacing.sm) {
-                            ForEach(TFTimeBlock.allCases) { block in
-                                Button(action: { timeBlock = block }) {
-                                    VStack(spacing: TFSpacing.xs) {
-                                        Text(block.emoji)
-                                            .font(.system(size: 14))
-                                        Text(block.label)
-                                            .font(.tfCaption())
-                                            .foregroundColor(timeBlock == block ? .white : .tfTextSecondary)
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, TFSpacing.sm)
-                                    .background(timeBlock == block ? Color.tfAccent : Color.tfBgSubtle)
-                                    .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
-                                    .offset(y: timeBlock == block ? -2 : 0)
-                                    .shadow(color: timeBlock == block ? Color.tfAccent.opacity(0.25) : .clear,
-                                            radius: 6, x: 0, y: 2)
-                                }
-                                .buttonStyle(SpringButtonStyle())
-                                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: timeBlock)
-                            }
-                        }
-                    }
-
-                    // MARK: Tags
-                    formSection(title: "Tags") {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: TFSpacing.sm) {
-                                ForEach(allTags) { tag in
-                                    let isSelected = selectedTags.contains(where: { $0.id == tag.id })
-                                    Button(action: {
-                                        if isSelected {
-                                            selectedTags.removeAll { $0.id == tag.id }
-                                        } else {
-                                            selectedTags.append(tag)
-                                        }
-                                    }) {
-                                        Text(tag.name.uppercased())
-                                            .font(.tfCaption())
-                                            .tracking(0.5)
-                                            .foregroundColor(isSelected ? .white : tag.color)
-                                            .padding(.horizontal, TFSpacing.md)
-                                            .padding(.vertical, TFSpacing.sm)
-                                            .background(isSelected ? tag.color : tag.color.opacity(0.10))
-                                            .clipShape(Capsule())
-                                    }
-                                    .buttonStyle(SpringButtonStyle())
-                                }
-
-                                if showNewTagInput {
-                                    HStack(spacing: TFSpacing.xs) {
-                                        TextField("Nieuwe tag", text: $newTagName)
-                                            .font(.tfCaption())
-                                            .frame(width: 80)
-                                        Button(action: addNewTag) {
-                                            Image(systemName: "checkmark")
-                                                .font(.system(size: 10, weight: .bold))
-                                                .foregroundColor(.tfAccent)
-                                        }
-                                    }
-                                    .padding(.horizontal, TFSpacing.sm)
-                                    .padding(.vertical, TFSpacing.sm)
-                                    .background(Color.tfBgSubtle)
-                                    .clipShape(Capsule())
-                                } else {
-                                    Button(action: { withAnimation { showNewTagInput = true } }) {
-                                        HStack(spacing: TFSpacing.xs) {
-                                            Image(systemName: "plus")
-                                                .font(.system(size: 10, weight: .bold))
-                                            Text("Nieuwe tag")
-                                                .font(.tfCaption())
-                                        }
-                                        .foregroundColor(.tfAccent)
-                                        .padding(.horizontal, TFSpacing.md)
-                                        .padding(.vertical, TFSpacing.sm)
-                                        .background(Color.tfAccent.opacity(0.10))
-                                        .clipShape(Capsule())
-                                    }
-                                    .buttonStyle(SpringButtonStyle())
-                                }
-                            }
-                            .padding(.vertical, TFSpacing.xs)
-                        }
-                    }
-
-                    // MARK: Project
-                    formSection(title: "Project") {
-                        Menu {
-                            Button("Geen project") { selectedProject = nil }
-                            ForEach(projects) { project in
-                                Button(action: { selectedProject = project }) {
-                                    Label("\(project.emoji) \(project.name)", systemImage: "")
-                                }
-                            }
-                        } label: {
-                            HStack {
-                                if let project = selectedProject {
-                                    Text(project.emoji + " " + project.name)
-                                        .font(.tfSubheadline())
-                                        .foregroundColor(.tfTextPrimary)
-                                } else {
-                                    Text("Geen project")
-                                        .font(.tfSubheadline())
-                                        .foregroundColor(.tfTextSecondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.up.chevron.down")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.tfTextSecondary)
-                            }
-                            .padding(TFSpacing.md)
-                            .background(Color.tfBgSubtle)
-                            .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
-                        }
-                    }
-
-                    // MARK: Subtasks
-                    formSection(title: "Subtaken") {
-                        VStack(spacing: TFSpacing.sm) {
-                            ForEach($subtasks) { $subtask in
-                                HStack(spacing: TFSpacing.sm) {
-                                    CheckButtonView(isDone: subtask.isDone) {
-                                        subtask.isDone.toggle()
-                                    }
-                                    TextField("Subtaak", text: $subtask.title)
-                                        .font(.tfBody())
-                                        .foregroundColor(.tfTextPrimary)
-                                    Button(action: { subtasks.removeAll { $0.id == subtask.id } }) {
-                                        Image(systemName: "xmark")
-                                            .font(.system(size: 11, weight: .semibold))
-                                            .foregroundColor(.tfTextSecondary)
-                                    }
-                                }
-                                .padding(.vertical, TFSpacing.xs)
-                            }
-
-                            // Add subtask row
-                            HStack(spacing: TFSpacing.sm) {
-                                Image(systemName: "plus.circle")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.tfAccent)
-                                TextField("Subtaak toevoegen...", text: $newSubtaskTitle)
-                                    .font(.tfBody())
-                                    .foregroundColor(.tfTextPrimary)
-                                    .onSubmit { addSubtask() }
-                            }
-                            .padding(.vertical, TFSpacing.xs)
-                        }
-                    }
-
-                    // MARK: Estimated time
-                    formSection(title: "Schatting") {
-                        HStack {
-                            Text("Schatting")
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 14, weight: .semibold))
+                            Text(showMoreOptions ? "Minder opties" : "Meer opties")
                                 .font(.tfSubheadline())
-                                .foregroundColor(.tfTextSecondary)
                             Spacer()
-                            let options = [nil, 15, 30, 45, 60, 90]
-                            HStack(spacing: TFSpacing.xs) {
-                                ForEach(options, id: \.self) { mins in
-                                    Button(action: { estimatedMinutes = mins }) {
-                                        Text(mins.map { "\($0)m" } ?? "–")
-                                            .font(.tfCaption())
-                                            .foregroundColor(estimatedMinutes == mins ? .white : .tfTextSecondary)
-                                            .padding(.horizontal, TFSpacing.sm)
-                                            .padding(.vertical, TFSpacing.xs)
-                                            .background(estimatedMinutes == mins ? Color.tfAccent : Color.tfBgSubtle)
-                                            .clipShape(Capsule())
-                                    }
-                                    .buttonStyle(SpringButtonStyle())
-                                }
-                            }
+                            Image(systemName: showMoreOptions ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 12, weight: .semibold))
                         }
+                        .foregroundColor(.tfTextPrimary)
                         .padding(TFSpacing.md)
                         .background(Color.tfBgSubtle)
                         .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, TFSpacing.lg)
+
+                    if showMoreOptions {
+                        advancedOptions
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
 
                     // MARK: Submit button
@@ -396,6 +186,14 @@ struct AddEditTaskSheet: View {
             .presentationDragIndicator(.hidden)
         }
         .onAppear(perform: populateIfEditing)
+        .onChange(of: hasDueDate) { _, newValue in
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                showDatePicker = newValue
+                if !newValue {
+                    hasDueTime = false
+                }
+            }
+        }
     }
 
     // MARK: - Helpers
@@ -410,6 +208,241 @@ struct AddEditTaskSheet: View {
                 .padding(.horizontal, TFSpacing.lg)
             content()
                 .padding(.horizontal, TFSpacing.lg)
+        }
+    }
+
+    private var advancedOptions: some View {
+        VStack(alignment: .leading, spacing: TFSpacing.xl) {
+            VStack(alignment: .leading, spacing: TFSpacing.sm) {
+                if showNotes {
+                    TextField("Notitie...", text: $notes, axis: .vertical)
+                        .font(.tfBody())
+                        .foregroundColor(.tfTextPrimary)
+                        .lineLimit(3...8)
+                        .padding(TFSpacing.md)
+                        .background(Color.tfBgSubtle)
+                        .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+                } else {
+                    Button(action: { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showNotes = true } }) {
+                        HStack {
+                            Image(systemName: "note.text")
+                                .font(.system(size: 14))
+                            Text("Notitie toevoegen...")
+                                .font(.tfBody())
+                        }
+                        .foregroundColor(.tfTextSecondary)
+                        .padding(TFSpacing.md)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.tfBgSubtle)
+                        .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, TFSpacing.lg)
+
+            if hasDueDate {
+                formSection(title: "Tijd") {
+                    VStack(spacing: TFSpacing.sm) {
+                        HStack {
+                            Image(systemName: "clock")
+                                .foregroundColor(.tfAccent)
+                                .font(.system(size: 14))
+                            Text("Tijd instellen")
+                                .font(.tfSubheadline())
+                                .foregroundColor(.tfTextSecondary)
+                            Spacer()
+                            CustomToggle(isOn: $hasDueTime)
+                        }
+                        .padding(TFSpacing.md)
+                        .background(Color.tfBgSubtle)
+                        .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+
+                        if hasDueTime {
+                            DatePicker("", selection: $dueTime, displayedComponents: .hourAndMinute)
+                                .datePickerStyle(.wheel)
+                                .labelsHidden()
+                                .tint(.tfAccent)
+                                .frame(maxWidth: .infinity)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                    }
+                }
+            }
+
+            formSection(title: "Tijdblok") {
+                HStack(spacing: TFSpacing.sm) {
+                    ForEach(TFTimeBlock.allCases) { block in
+                        Button(action: { timeBlock = block }) {
+                            VStack(spacing: TFSpacing.xs) {
+                                Text(block.emoji)
+                                    .font(.system(size: 14))
+                                Text(block.label)
+                                    .font(.tfCaption())
+                                    .foregroundColor(timeBlock == block ? .white : .tfTextSecondary)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, TFSpacing.sm)
+                            .background(timeBlock == block ? Color.tfAccent : Color.tfBgSubtle)
+                            .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+                            .offset(y: timeBlock == block ? -2 : 0)
+                            .shadow(color: timeBlock == block ? Color.tfAccent.opacity(0.25) : .clear,
+                                    radius: 6, x: 0, y: 2)
+                        }
+                        .buttonStyle(SpringButtonStyle())
+                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: timeBlock)
+                    }
+                }
+            }
+
+            formSection(title: "Tags") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: TFSpacing.sm) {
+                        ForEach(allTags) { tag in
+                            let isSelected = selectedTags.contains(where: { $0.id == tag.id })
+                            Button(action: {
+                                if isSelected {
+                                    selectedTags.removeAll { $0.id == tag.id }
+                                } else {
+                                    selectedTags.append(tag)
+                                }
+                            }) {
+                                Text(tag.name.uppercased())
+                                    .font(.tfCaption())
+                                    .tracking(0.5)
+                                    .foregroundColor(isSelected ? .white : tag.color)
+                                    .padding(.horizontal, TFSpacing.md)
+                                    .padding(.vertical, TFSpacing.sm)
+                                    .background(isSelected ? tag.color : tag.color.opacity(0.10))
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(SpringButtonStyle())
+                        }
+
+                        if showNewTagInput {
+                            HStack(spacing: TFSpacing.xs) {
+                                TextField("Nieuwe tag", text: $newTagName)
+                                    .font(.tfCaption())
+                                    .frame(width: 80)
+                                Button(action: addNewTag) {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(.tfAccent)
+                                }
+                            }
+                            .padding(.horizontal, TFSpacing.sm)
+                            .padding(.vertical, TFSpacing.sm)
+                            .background(Color.tfBgSubtle)
+                            .clipShape(Capsule())
+                        } else {
+                            Button(action: { withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showNewTagInput = true } }) {
+                                HStack(spacing: TFSpacing.xs) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 10, weight: .bold))
+                                    Text("Nieuwe tag")
+                                        .font(.tfCaption())
+                                }
+                                .foregroundColor(.tfAccent)
+                                .padding(.horizontal, TFSpacing.md)
+                                .padding(.vertical, TFSpacing.sm)
+                                .background(Color.tfAccent.opacity(0.10))
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(SpringButtonStyle())
+                        }
+                    }
+                    .padding(.vertical, TFSpacing.xs)
+                }
+            }
+
+            formSection(title: "Project") {
+                Menu {
+                    Button("Geen project") { selectedProject = nil }
+                    ForEach(projects) { project in
+                        Button(action: { selectedProject = project }) {
+                            Text("\(project.emoji) \(project.name)")
+                        }
+                    }
+                } label: {
+                    HStack {
+                        if let project = selectedProject {
+                            Text(project.emoji + " " + project.name)
+                                .font(.tfSubheadline())
+                                .foregroundColor(.tfTextPrimary)
+                        } else {
+                            Text("Geen project")
+                                .font(.tfSubheadline())
+                                .foregroundColor(.tfTextSecondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.system(size: 12))
+                            .foregroundColor(.tfTextSecondary)
+                    }
+                    .padding(TFSpacing.md)
+                    .background(Color.tfBgSubtle)
+                    .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+                }
+            }
+
+            formSection(title: "Subtaken") {
+                VStack(spacing: TFSpacing.sm) {
+                    ForEach($subtasks) { $subtask in
+                        HStack(spacing: TFSpacing.sm) {
+                            CheckButtonView(isDone: subtask.isDone) {
+                                subtask.isDone.toggle()
+                            }
+                            TextField("Subtaak", text: $subtask.title)
+                                .font(.tfBody())
+                                .foregroundColor(.tfTextPrimary)
+                            Button(action: { subtasks.removeAll { $0.id == subtask.id } }) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(.tfTextSecondary)
+                            }
+                        }
+                        .padding(.vertical, TFSpacing.xs)
+                    }
+
+                    HStack(spacing: TFSpacing.sm) {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 16))
+                            .foregroundColor(.tfAccent)
+                        TextField("Subtaak toevoegen...", text: $newSubtaskTitle)
+                            .font(.tfBody())
+                            .foregroundColor(.tfTextPrimary)
+                            .onSubmit { addSubtask() }
+                    }
+                    .padding(.vertical, TFSpacing.xs)
+                }
+            }
+
+            formSection(title: "Schatting") {
+                HStack {
+                    Text("Schatting")
+                        .font(.tfSubheadline())
+                        .foregroundColor(.tfTextSecondary)
+                    Spacer()
+                    let options = [nil, 15, 30, 45, 60, 90]
+                    HStack(spacing: TFSpacing.xs) {
+                        ForEach(options, id: \.self) { mins in
+                            Button(action: { estimatedMinutes = mins }) {
+                                Text(mins.map { "\($0)m" } ?? "–")
+                                    .font(.tfCaption())
+                                    .foregroundColor(estimatedMinutes == mins ? .white : .tfTextSecondary)
+                                    .padding(.horizontal, TFSpacing.sm)
+                                    .padding(.vertical, TFSpacing.xs)
+                                    .background(estimatedMinutes == mins ? Color.tfAccent : Color.tfBgSubtle)
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(SpringButtonStyle())
+                        }
+                    }
+                }
+                .padding(TFSpacing.md)
+                .background(Color.tfBgSubtle)
+                .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+            }
         }
     }
 
@@ -429,6 +462,7 @@ struct AddEditTaskSheet: View {
         selectedTags = task.tags
         subtasks = task.subtasks
         estimatedMinutes = task.estimatedMinutes
+        showMoreOptions = hasAdvancedConfiguration(task)
     }
 
     private func addNewTag() {
@@ -445,6 +479,22 @@ struct AddEditTaskSheet: View {
         guard !newSubtaskTitle.isEmpty else { return }
         subtasks.append(TFSubtask(title: newSubtaskTitle))
         newSubtaskTitle = ""
+    }
+
+    private func toggleMoreOptions() {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            showMoreOptions.toggle()
+        }
+    }
+
+    private func hasAdvancedConfiguration(_ task: TFTask) -> Bool {
+        !task.notes.isEmpty ||
+        task.dueTime != nil ||
+        task.timeBlock != .unscheduled ||
+        task.project != nil ||
+        !task.tags.isEmpty ||
+        !task.subtasks.isEmpty ||
+        task.estimatedMinutes != nil
     }
 
     private func saveTask() {

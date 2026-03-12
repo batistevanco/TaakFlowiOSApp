@@ -60,7 +60,21 @@ struct TaskCardView: View {
 
                 Spacer(minLength: 0)
 
-                PriorityDotView(priority: task.priority)
+                VStack(spacing: TFSpacing.sm) {
+                    PriorityDotView(priority: task.priority)
+
+                    if !task.isDone {
+                        Button(action: { onFocus?(task) }) {
+                            Image(systemName: "timer")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.tfTextSecondary)
+                                .frame(width: 28, height: 28)
+                                .background(Color.tfBgSubtle)
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(SpringButtonStyle())
+                    }
+                }
             }
             .padding(.horizontal, TFSpacing.md)
             .padding(.vertical, TFSpacing.md)

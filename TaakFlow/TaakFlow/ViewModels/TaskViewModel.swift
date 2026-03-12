@@ -52,7 +52,7 @@ class TaskViewModel {
         // Filter
         switch activeFilter {
         case .all:
-            break
+            result = result.filter { !$0.isDone }
         case .high:
             result = result.filter { $0.priority == .high && !$0.isDone }
         case .medium:

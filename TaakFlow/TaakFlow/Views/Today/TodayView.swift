@@ -4,6 +4,14 @@
 import SwiftUI
 import SwiftData
 
+private enum TodayTaskScope: String, CaseIterable, Identifiable {
+    case today = "Vandaag"
+    case all = "Alle"
+    case overdue = "Verlopen"
+
+    var id: String { rawValue }
+}
+
 struct TodayView: View {
     @Environment(\.modelContext) private var context
     @Query private var allTasks: [TFTask]
@@ -15,25 +23,75 @@ struct TodayView: View {
     @State private var showAddTask = false
     @State private var taskToEdit: TFTask? = nil
     @State private var taskForFocus: TFTask? = nil
+    @State private var selectedScope: TodayTaskScope = .today
+    @State private var searchText = ""
     var onOpenSettings: (() -> Void)
 
     // MARK: - Computed
     private var todayTasks: [TFTask] {
-        allTasks.filter { task in
+        sortedTasks(allTasks.filter { task in
             guard let due = task.dueDate else { return false }
             return due.isToday
+        })
+    }
+
+    private var overdueTasks: [TFTask] {
+        sortedTasks(allTasks.filter(\.isOverdue))
+    }
+
+    private var scopedTasks: [TFTask] {
+        switch selectedScope {
+        case .today:
+            return todayTasks
+        case .all:
+            return sortedTasks(allTasks)
+        case .overdue:
+            return overdueTasks
         }
     }
 
-    private var morningTasks: [TFTask] { todayTasks.filter { $0.timeBlock == .morning } }
-    private var afternoonTasks: [TFTask] { todayTasks.filter { $0.timeBlock == .afternoon } }
-    private var eveningTasks: [TFTask] { todayTasks.filter { $0.timeBlock == .evening } }
-    private var unscheduledTasks: [TFTask] {
-        todayTasks.filter { $0.timeBlock == .unscheduled }
+    private var visibleScopedTasks: [TFTask] {
+        guard !searchText.isEmpty else { return scopedTasks }
+        return scopedTasks.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText) ||
+            $0.notes.localizedCaseInsensitiveContains(searchText)
+        }
     }
 
-    private var completedToday: Int { todayTasks.filter(\.isDone).count }
-    private var urgentCount: Int { todayTasks.filter { $0.priority == .high && !$0.isDone }.count }
+    private var morningTasks: [TFTask] { visibleScopedTasks.filter { $0.timeBlock == .morning } }
+    private var afternoonTasks: [TFTask] { visibleScopedTasks.filter { $0.timeBlock == .afternoon } }
+    private var eveningTasks: [TFTask] { visibleScopedTasks.filter { $0.timeBlock == .evening } }
+    private var unscheduledTasks: [TFTask] {
+        visibleScopedTasks.filter { $0.timeBlock == .unscheduled }
+    }
+
+    private var completedTasks: Int { visibleScopedTasks.filter(\.isDone).count }
+    private var urgentCount: Int { visibleScopedTasks.filter { $0.priority == .high && !$0.isDone }.count }
+    private var scopedProjectsCount: Int {
+        Set(visibleScopedTasks.compactMap { $0.project?.id }).count
+    }
+
+    private var scopeSubtitle: String {
+        switch selectedScope {
+        case .today:
+            return Date().fullDateString
+        case .all:
+            return "\(visibleScopedTasks.count) taken in beeld"
+        case .overdue:
+            return visibleScopedTasks.isEmpty ? "Geen verlopen taken" : "\(visibleScopedTasks.count) taken vragen aandacht"
+        }
+    }
+
+    private var listTitle: String {
+        switch selectedScope {
+        case .today:
+            return "Vandaag"
+        case .all:
+            return "Alle taken"
+        case .overdue:
+            return "Verlopen taken"
+        }
+    }
 
     private var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
@@ -54,8 +112,8 @@ struct TodayView: View {
 
                         // Hero card
                         GradientHeroCardView(
-                            completedCount: completedToday,
-                            totalCount: todayTasks.count
+                            completedCount: completedTasks,
+                            totalCount: visibleScopedTasks.count
                         )
                         .padding(.horizontal, TFSpacing.lg)
 
@@ -63,59 +121,24 @@ struct TodayView: View {
                         TodayStatsRow(
                             streakCount: currentStreak,
                             urgentCount: urgentCount,
-                            projectsCount: activeProjects.count
+                            projectsCount: selectedScope == .today ? activeProjects.count : scopedProjectsCount
                         )
                         .padding(.horizontal, TFSpacing.lg)
 
-                        // Time block sections
-                        if todayTasks.isEmpty {
-                            EmptyStateView(
-                                systemImage: "sun.max",
-                                title: "Geen taken vandaag",
-                                subtitle: "Tik op + om taken toe te voegen aan je dag"
-                            )
-                            .frame(minHeight: 250)
+                        scopeFilterBar
+                            .padding(.horizontal, TFSpacing.lg)
+
+                        if selectedScope != .today {
+                            searchBar
+                                .padding(.horizontal, TFSpacing.lg)
+                        }
+
+                        // Task content
+                        if visibleScopedTasks.isEmpty {
+                            emptyStateView
+                                .frame(minHeight: 250)
                         } else {
-                            if !morningTasks.isEmpty {
-                                TimeBlockSection(
-                                    block: .morning,
-                                    tasks: morningTasks,
-                                    onFocus: { taskForFocus = $0 },
-                                    onEdit: { taskToEdit = $0 },
-                                    onDelete: deleteTask,
-                                    onDuplicate: duplicateTask
-                                )
-                            }
-                            if !afternoonTasks.isEmpty {
-                                TimeBlockSection(
-                                    block: .afternoon,
-                                    tasks: afternoonTasks,
-                                    onFocus: { taskForFocus = $0 },
-                                    onEdit: { taskToEdit = $0 },
-                                    onDelete: deleteTask,
-                                    onDuplicate: duplicateTask
-                                )
-                            }
-                            if !eveningTasks.isEmpty {
-                                TimeBlockSection(
-                                    block: .evening,
-                                    tasks: eveningTasks,
-                                    onFocus: { taskForFocus = $0 },
-                                    onEdit: { taskToEdit = $0 },
-                                    onDelete: deleteTask,
-                                    onDuplicate: duplicateTask
-                                )
-                            }
-                            if !unscheduledTasks.isEmpty {
-                                TimeBlockSection(
-                                    block: .unscheduled,
-                                    tasks: unscheduledTasks,
-                                    onFocus: { taskForFocus = $0 },
-                                    onEdit: { taskToEdit = $0 },
-                                    onDelete: deleteTask,
-                                    onDuplicate: duplicateTask
-                                )
-                            }
+                            taskContent
                         }
 
                         Spacer(minLength: 100)
@@ -145,7 +168,7 @@ struct TodayView: View {
     private var headerView: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: TFSpacing.xs) {
-                Text(Date().fullDateString)
+                Text(scopeSubtitle)
                     .font(.tfCaption())
                     .tracking(0.5)
                     .foregroundColor(.tfTextSecondary)
@@ -172,6 +195,142 @@ struct TodayView: View {
         }
     }
 
+    private var scopeFilterBar: some View {
+        HStack(spacing: TFSpacing.sm) {
+            ForEach(TodayTaskScope.allCases) { scope in
+                FilterPillView(
+                    label: scope.rawValue,
+                    isActive: selectedScope == scope
+                ) {
+                    selectedScope = scope
+                    if scope == .today {
+                        searchText = ""
+                    }
+                }
+            }
+        }
+    }
+
+    private var searchBar: some View {
+        HStack {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.tfTextSecondary)
+                .font(.system(size: 15))
+            TextField("Zoeken in taken...", text: $searchText)
+                .font(.tfSubheadline())
+                .foregroundColor(.tfTextPrimary)
+        }
+        .padding(TFSpacing.md)
+        .background(Color.tfBgSubtle)
+        .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+    }
+
+    @ViewBuilder
+    private var taskContent: some View {
+        if selectedScope == .today {
+            if !morningTasks.isEmpty {
+                TimeBlockSection(
+                    block: .morning,
+                    tasks: morningTasks,
+                    onFocus: { taskForFocus = $0 },
+                    onEdit: { taskToEdit = $0 },
+                    onDelete: deleteTask,
+                    onDuplicate: duplicateTask
+                )
+            }
+            if !afternoonTasks.isEmpty {
+                TimeBlockSection(
+                    block: .afternoon,
+                    tasks: afternoonTasks,
+                    onFocus: { taskForFocus = $0 },
+                    onEdit: { taskToEdit = $0 },
+                    onDelete: deleteTask,
+                    onDuplicate: duplicateTask
+                )
+            }
+            if !eveningTasks.isEmpty {
+                TimeBlockSection(
+                    block: .evening,
+                    tasks: eveningTasks,
+                    onFocus: { taskForFocus = $0 },
+                    onEdit: { taskToEdit = $0 },
+                    onDelete: deleteTask,
+                    onDuplicate: duplicateTask
+                )
+            }
+            if !unscheduledTasks.isEmpty {
+                TimeBlockSection(
+                    block: .unscheduled,
+                    tasks: unscheduledTasks,
+                    onFocus: { taskForFocus = $0 },
+                    onEdit: { taskToEdit = $0 },
+                    onDelete: deleteTask,
+                    onDuplicate: duplicateTask
+                )
+            }
+        } else {
+            VStack(spacing: TFSpacing.sm) {
+                SectionHeaderView(
+                    emoji: selectedScope == .all ? "🗂️" : "⚠️",
+                    title: listTitle,
+                    done: visibleScopedTasks.filter(\.isDone).count,
+                    total: visibleScopedTasks.count
+                )
+
+                ForEach(Array(visibleScopedTasks.enumerated()), id: \.element.id) { index, task in
+                    TaskCardView(
+                        task: task,
+                        onFocus: { taskForFocus = $0 },
+                        onEdit: { taskToEdit = $0 },
+                        onDelete: deleteTask,
+                        onDuplicate: duplicateTask
+                    )
+                    .padding(.horizontal, TFSpacing.lg)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.97)),
+                        removal: .move(edge: .leading).combined(with: .opacity)
+                    ))
+                    .animation(
+                        .spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.04),
+                        value: visibleScopedTasks.count
+                    )
+                }
+            }
+        }
+    }
+
+    private var emptyStateView: some View {
+        EmptyStateView(
+            systemImage: selectedScope == .overdue ? "exclamationmark.triangle" : "checkmark.square",
+            title: emptyStateTitle,
+            subtitle: emptyStateSubtitle,
+            buttonLabel: "Taak toevoegen",
+            buttonAction: { showAddTask = true }
+        )
+    }
+
+    private var emptyStateTitle: String {
+        if selectedScope == .today {
+            return "Geen taken vandaag"
+        }
+        if selectedScope == .overdue {
+            return "Niets verlopen"
+        }
+        return searchText.isEmpty ? "Nog geen taken" : "Geen resultaten"
+    }
+
+    private var emptyStateSubtitle: String {
+        if selectedScope == .today {
+            return "Tik op + om taken toe te voegen aan je dag"
+        }
+        if selectedScope == .overdue {
+            return "Je planning is weer helemaal bijgewerkt"
+        }
+        return searchText.isEmpty
+            ? "Gebruik + om je eerste taak toe te voegen"
+            : "Probeer een andere zoekterm of filter"
+    }
+
     // MARK: - Actions
 
     private func deleteTask(_ task: TFTask) {
@@ -190,5 +349,34 @@ struct TodayView: View {
         copy.tags = task.tags
         copy.project = task.project
         context.insert(copy)
+    }
+
+    private func sortedTasks(_ tasks: [TFTask]) -> [TFTask] {
+        tasks.sorted { lhs, rhs in
+            if lhs.isDone != rhs.isDone {
+                return !lhs.isDone && rhs.isDone
+            }
+            switch (lhs.dueDate, rhs.dueDate) {
+            case (.some(let lDate), .some(let rDate)):
+                if lDate != rDate { return lDate < rDate }
+            case (.some, .none):
+                return true
+            case (.none, .some):
+                return false
+            case (.none, .none):
+                break
+            }
+            switch (lhs.dueTime, rhs.dueTime) {
+            case (.some(let lTime), .some(let rTime)):
+                if lTime != rTime { return lTime < rTime }
+            case (.some, .none):
+                return true
+            case (.none, .some):
+                return false
+            case (.none, .none):
+                break
+            }
+            return lhs.createdAt > rhs.createdAt
+        }
     }
 }

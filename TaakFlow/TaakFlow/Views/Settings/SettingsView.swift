@@ -11,7 +11,6 @@ struct SettingsView: View {
     // MARK: - AppStorage
     @AppStorage("checkinEnabled")       private var checkinEnabled = true
     @AppStorage("checkinTime")          private var checkinTimeStr = "08:00"
-    @AppStorage("checkinShowProjects")  private var checkinShowProjects = true
     @AppStorage("checkinShowMood")      private var checkinShowMood = true
 
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
@@ -72,24 +71,19 @@ struct SettingsView: View {
                     .clipShape(RoundedRectangle(cornerRadius: TFRadius.card))
                     .padding(.horizontal, TFSpacing.lg)
 
-                    // MARK: Check-in
-                    settingsSection("Ochtend Check-in") {
-                        toggleRow(title: "Check-in inschakelen", subtitle: "Dagelijkse ochtend vragenlijst", isOn: $checkinEnabled)
-                        Divider().padding(.leading, TFSpacing.lg)
+                    // MARK: Planning (check-in + meldingen)
+                    settingsSection("Planning") {
+                        toggleRow(title: "Ochtend check-in", subtitle: "Dagelijkse vragenlijst bij opstart", isOn: $checkinEnabled)
                         if checkinEnabled {
-                            timePickerRow(title: "Tijdstip", options: checkinTimes, selection: $checkinTimeStr)
+                            Divider().padding(.leading, TFSpacing.lg)
+                            timePickerRow(title: "Tijdstip check-in", options: checkinTimes, selection: $checkinTimeStr)
                             Divider().padding(.leading, TFSpacing.lg)
                             toggleRow(title: "Stemming tonen", subtitle: "Mood vraag in check-in", isOn: $checkinShowMood)
-                            Divider().padding(.leading, TFSpacing.lg)
-                            toggleRow(title: "Projecten tonen", subtitle: "Vraag welke projecten vandaag", isOn: $checkinShowProjects)
                         }
-                    }
-
-                    // MARK: Notifications
-                    settingsSection("Meldingen") {
+                        Divider().padding(.leading, TFSpacing.lg)
                         toggleRow(title: "Taak reminders", subtitle: "Push notificaties voor taken", isOn: $notificationsEnabled)
                         Divider().padding(.leading, TFSpacing.lg)
-                        toggleRow(title: "Dagelijkse samenvatting", subtitle: "Elke avond overzicht", isOn: $dailySummaryEnabled)
+                        toggleRow(title: "Dagelijkse samenvatting", subtitle: "Elke avond een overzicht", isOn: $dailySummaryEnabled)
                         if dailySummaryEnabled {
                             Divider().padding(.leading, TFSpacing.lg)
                             timePickerRow(title: "Tijd samenvatting", options: summaryTimes, selection: $dailySummaryTimeStr)
@@ -176,10 +170,10 @@ struct SettingsView: View {
                         .buttonStyle(.plain)
                     }
 
-                    // MARK: About
-                    settingsSection("Over") {
+                    // MARK: Info (over + support)
+                    settingsSection("Info") {
                         HStack {
-                            Text("Over TaakFlow")
+                            Text("TaakFlow")
                                 .font(.tfSubheadline())
                                 .foregroundColor(.tfTextPrimary)
                             Spacer()
@@ -205,10 +199,9 @@ struct SettingsView: View {
                             .padding(.horizontal, TFSpacing.lg)
                             .padding(.vertical, TFSpacing.md)
                         }
-                    }
 
-                    // MARK: Support
-                    settingsSection("Support") {
+                        Divider().padding(.leading, TFSpacing.lg)
+
                         Button(action: { showHelp = true }) {
                             HStack {
                                 Label("Help & Uitleg", systemImage: "questionmark.circle")

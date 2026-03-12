@@ -6,18 +6,16 @@ import SwiftData
 
 struct StatsView: View {
     @Query private var allTasks: [TFTask]
-    @Query(filter: #Predicate<TFProject> { !$0.isArchived }) private var activeProjects: [TFProject]
 
     @AppStorage("currentStreak") private var currentStreak = 0
     @AppStorage("longestStreak") private var longestStreak = 0
 
     @State private var viewModel = StatsViewModel()
+    @State private var showTagBreakdown = false
 
     private var weeklyData: [StatsViewModel.DayStats] { viewModel.weeklyStats(tasks: allTasks) }
     private var calendarDays: [StatsViewModel.CalendarDay] { viewModel.last30Days(tasks: allTasks) }
     private var insights: [String] { viewModel.generateInsights(tasks: allTasks) }
-    private var totalThisWeek: Int { viewModel.totalCompletedThisWeek(tasks: allTasks) }
-    private var focusTime: Int { viewModel.focusTimeThisWeek(tasks: allTasks) }
 
     // Week label
     private var weekLabel: String {
@@ -61,14 +59,12 @@ struct StatsView: View {
                     // Streak section
                     streakSection
 
-                    // Summary cards
-                    summaryCards
-
-                    // Tag breakdown
+                    // Tag breakdown (collapsible)
                     let breakdown = viewModel.tagBreakdown(tasks: allTasks)
                     if !breakdown.isEmpty {
                         tagBreakdownView(breakdown: breakdown)
                     }
+
 
                     // Insights
                     insightsSection
@@ -115,61 +111,48 @@ struct StatsView: View {
         .padding(.horizontal, TFSpacing.lg)
     }
 
-    // MARK: - Summary Cards
-
-    private var summaryCards: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: TFSpacing.md) {
-            summaryCard(emoji: "✅", value: "\(totalThisWeek)", label: "Voltooid")
-            summaryCard(emoji: "🔥", value: "\(currentStreak)", label: "Streak")
-            summaryCard(emoji: "📁", value: "\(activeProjects.count)", label: "Projecten")
-            summaryCard(emoji: "⏱", value: focusTime > 0 ? "\(focusTime)m" : "–", label: "Focus tijd")
-        }
-        .padding(.horizontal, TFSpacing.lg)
-    }
-
-    private func summaryCard(emoji: String, value: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: TFSpacing.xs) {
-            Text(emoji).font(.system(size: 18))
-            Text(value)
-                .font(.system(size: 28, weight: .heavy))
-                .foregroundColor(.tfTextPrimary)
-                .tracking(-0.5)
-            Text(label)
-                .font(.tfCaption())
-                .foregroundColor(.tfTextSecondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(TFSpacing.lg)
-        .background(Color.tfBgCard)
-        .clipShape(RoundedRectangle(cornerRadius: TFRadius.card))
-        .cardShadow()
-    }
-
     // MARK: - Tag Breakdown
 
     private func tagBreakdownView(breakdown: [StatsViewModel.TagBreakdown]) -> some View {
         VStack(alignment: .leading, spacing: TFSpacing.md) {
-            Text("CATEGORIEËN")
-                .font(.tfCaption())
-                .tracking(0.8)
-                .foregroundColor(.tfTextSecondary)
-                .padding(.horizontal, TFSpacing.lg)
-
-            VStack(spacing: TFSpacing.sm) {
-                ForEach(breakdown) { item in
-                    HStack {
-                        SmallTagPill(name: item.tagName, color: item.color)
-                        Spacer()
-                        Text("\(item.count) taken")
-                            .font(.tfCaption2())
-                            .foregroundColor(.tfTextSecondary)
-                    }
-                    .padding(TFSpacing.md)
-                    .background(Color.tfBgCard)
-                    .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+            // Collapsible header
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+                    showTagBreakdown.toggle()
                 }
+            }) {
+                HStack {
+                    Text("CATEGORIEËN")
+                        .font(.tfCaption())
+                        .tracking(0.8)
+                        .foregroundColor(.tfTextSecondary)
+                    Spacer()
+                    Image(systemName: showTagBreakdown ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.tfTextSecondary)
+                }
+                .padding(.horizontal, TFSpacing.lg)
             }
-            .padding(.horizontal, TFSpacing.lg)
+            .buttonStyle(.plain)
+
+            if showTagBreakdown {
+                VStack(spacing: TFSpacing.sm) {
+                    ForEach(breakdown) { item in
+                        HStack {
+                            SmallTagPill(name: item.tagName, color: item.color)
+                            Spacer()
+                            Text("\(item.count) taken")
+                                .font(.tfCaption2())
+                                .foregroundColor(.tfTextSecondary)
+                        }
+                        .padding(TFSpacing.md)
+                        .background(Color.tfBgCard)
+                        .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+                    }
+                }
+                .padding(.horizontal, TFSpacing.lg)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
     }
 

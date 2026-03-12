@@ -17,13 +17,24 @@ struct AllTasksView: View {
         viewModel.filteredTasks(allTasks)
     }
 
+    private var headerCountText: String {
+        switch viewModel.activeFilter {
+        case .all:
+            return "\(allTasks.filter { !$0.isDone }.count) open taken"
+        case .done:
+            return "\(allTasks.filter(\.isDone).count) voltooide taken"
+        default:
+            return "\(displayedTasks.count) taken"
+        }
+    }
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Header
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: TFSpacing.xs) {
-                        Text("\(allTasks.count) taken")
+                        Text(headerCountText)
                             .font(.tfCaption())
                             .tracking(0.5)
                             .foregroundColor(.tfTextSecondary)

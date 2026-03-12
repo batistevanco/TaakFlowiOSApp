@@ -7,9 +7,7 @@ import SwiftData
 struct MorningCheckInView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @Query(filter: #Predicate<TFProject> { !$0.isArchived }) private var projects: [TFProject]
 
-    @AppStorage("checkinShowProjects") private var checkinShowProjects = true
     @AppStorage("currentStreak") private var currentStreak = 0
     @AppStorage("longestStreak") private var longestStreak = 0
     @AppStorage("lastStreakDate") private var lastStreakDate = ""
@@ -17,7 +15,7 @@ struct MorningCheckInView: View {
     @State private var viewModel = CheckInViewModel()
     @State private var showConfetti = false
 
-    private var totalSteps: Int { checkinShowProjects ? 4 : 3 }
+    private var totalSteps: Int { viewModel.totalSteps }
 
     var body: some View {
         ZStack {
@@ -54,9 +52,6 @@ struct MorningCheckInView: View {
                             .transition(.springSlideFromRight)
                     case 1:
                         CheckInGoalStep(viewModel: viewModel)
-                            .transition(.springSlideFromRight)
-                    case 2 where checkinShowProjects:
-                        CheckInProjectsStep(viewModel: viewModel, projects: projects)
                             .transition(.springSlideFromRight)
                     default:
                         CheckInTasksStep(viewModel: viewModel)
@@ -115,7 +110,7 @@ struct MorningCheckInView: View {
 
     private func completeCheckIn() {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        viewModel.saveCheckIn(projects: projects, context: context)
+        viewModel.saveCheckIn(context: context)
 
         // Update streak
         let today = {

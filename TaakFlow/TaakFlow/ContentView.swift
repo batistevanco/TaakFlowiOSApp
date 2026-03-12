@@ -5,9 +5,6 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var context
-    @Query private var allTasks: [TFTask]
-    @Query private var allProjects: [TFProject]
     @Query private var checkInEntries: [CheckInEntry]
 
     @AppStorage("checkinEnabled")  private var checkinEnabled = true
@@ -57,16 +54,8 @@ struct ContentView: View {
         }
         .onAppear {
             configureTabBar()
-            seedDemoDataIfNeeded()
             checkForCheckIn()
         }
-    }
-
-    // MARK: - Demo Data Seed
-
-    private func seedDemoDataIfNeeded() {
-        guard allTasks.isEmpty && allProjects.isEmpty else { return }
-        PreviewData.insertSampleData(into: context)
     }
 
     // MARK: - Morning Check-in Trigger
