@@ -1,9 +1,6 @@
-//
-//  TaakFlowApp.swift
-//  TaakFlow
-//
-//  Created by Batiste Vancoillie on 10/03/2026.
-//
+// TaakFlowApp.swift
+// TaakFlow — Vancoillie Studio · be.vancoilliestudio.taakflow
+// Created by Batiste Vancoillie on 10/03/2026.
 
 import SwiftUI
 import SwiftData
@@ -11,20 +8,33 @@ import SwiftData
 @main
 struct TaakFlowApp: App {
 
-    let container: ModelContainer = {
-        let schema = Schema([TFTask.self, TFProject.self, TFTag.self])
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-        do {
-            return try ModelContainer(for: schema, configurations: [config])
-        } catch {
-            fatalError("TaakFlow: could not create ModelContainer – \(error)")
-        }
-    }()
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("colorScheme") private var colorSchemeRaw = "system"
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            Group {
+                if hasCompletedOnboarding {
+                    ContentView()
+                } else {
+                    OnboardingView()
+                }
+            }
+            .preferredColorScheme(resolvedColorScheme)
         }
-        .modelContainer(container)
+        .modelContainer(for: [
+            TFTask.self,
+            TFProject.self,
+            TFTag.self,
+            CheckInEntry.self
+        ])
+    }
+
+    private var resolvedColorScheme: ColorScheme? {
+        switch colorSchemeRaw {
+        case "light": return .light
+        case "dark":  return .dark
+        default:      return nil
+        }
     }
 }

@@ -1,223 +1,141 @@
+// AllTasksView.swift
+// TaakFlow — Vancoillie Studio
+
 import SwiftUI
 import SwiftData
 
 struct AllTasksView: View {
-    @Environment(\.modelContext) private var modelContext
+    @Environment(\.modelContext) private var context
     @Query private var allTasks: [TFTask]
-    @Query(sort: \TFProject.name) private var allProjects: [TFProject]
-    @Query(sort: \TFTag.name)     private var allTags: [TFTag]
 
-    @State private var searchText = ""
+    @State private var viewModel = TaskViewModel()
     @State private var showAddTask = false
-    @State private var filterPriority: TaskPriority? = nil
-    @State private var filterProject: TFProject? = nil
-    @State private var filterTag: TFTag? = nil
-    @State private var sortOrder: TaskSortOrder = .dueDate
-
-    private var hasActiveFilters: Bool {
-        filterPriority != nil || filterProject != nil || filterTag != nil
-    }
-
-    // MARK: Filtered & Sorted Tasks
+    @State private var taskToEdit: TFTask? = nil
+    @State private var taskForFocus: TFTask? = nil
 
     private var displayedTasks: [TFTask] {
-        var tasks = allTasks
-
-        if !searchText.isEmpty {
-            tasks = tasks.filter {
-                $0.title.localizedCaseInsensitiveContains(searchText)
-                || $0.notes.localizedCaseInsensitiveContains(searchText)
-            }
-        }
-        if let p = filterPriority { tasks = tasks.filter { $0.priority == p } }
-        if let proj = filterProject { tasks = tasks.filter { $0.project?.id == proj.id } }
-        if let tag = filterTag { tasks = tasks.filter { $0.tags.contains { $0.id == tag.id } } }
-
-        switch sortOrder {
-        case .dueDate:
-            tasks.sort {
-                switch ($0.dueDate, $1.dueDate) {
-                case (nil, nil): return $0.createdAt > $1.createdAt
-                case (nil, _):   return false
-                case (_, nil):   return true
-                case (let a, let b): return a! < b!
-                }
-            }
-        case .priority:
-            tasks.sort { $0.priority.sortOrder < $1.priority.sortOrder }
-        case .createdAt:
-            tasks.sort { $0.createdAt > $1.createdAt }
-        }
-
-        return tasks
+        viewModel.filteredTasks(allTasks)
     }
-
-    // MARK: Body
 
     var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottom) {
-                List {
-                    ForEach(displayedTasks) { task in
-                        TaskRowView(task: task)
-                            .listRowInsets(EdgeInsets())
-                            .listRowSeparator(.hidden)
+            VStack(spacing: 0) {
+                // Header
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: TFSpacing.xs) {
+                        Text("\(allTasks.count) taken")
+                            .font(.tfCaption())
+                            .tracking(0.5)
+                            .foregroundColor(.tfTextSecondary)
+                            .textCase(.uppercase)
+                        Text("Alle Taken")
+                            .font(.tfLargeTitle())
+                            .foregroundColor(.tfTextPrimary)
+                            .tracking(-1.0)
                     }
-                    .onDelete(perform: deleteTasks)
-
-                    if displayedTasks.isEmpty {
-                        EmptyStateView(
-                            icon: "checklist",
-                            title: hasActiveFilters ? "No matching tasks" : "No tasks yet",
-                            subtitle: hasActiveFilters
-                                ? "Try clearing your filters"
-                                : "Tap + to create your first task"
-                        )
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
+                    Spacer()
+                    Button(action: { showAddTask = true }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 36, height: 36)
+                            .background(LinearGradient.tfHero)
+                            .clipShape(Circle())
+                            .accentGlowShadow()
                     }
+                    .accessibilityLabel("Taak toevoegen")
                 }
-                .listStyle(.plain)
-                .searchable(text: $searchText, prompt: "Search tasks…")
-                .navigationTitle("All Tasks")
-                .toolbar {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button { showAddTask = true } label: { Image(systemName: "plus") }
-                    }
-                    ToolbarItem(placement: .secondaryAction) {
-                        filterMenu
-                    }
-                }
+                .padding(.horizontal, TFSpacing.lg)
+                .padding(.top, TFSpacing.lg)
+                .padding(.bottom, TFSpacing.md)
+                .background(Color.tfBgPrimary)
 
-                // Active-filter chips bar
-                if hasActiveFilters {
-                    activeFiltersBar
-                        .padding(.bottom, 0)
+                // Search
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.tfTextSecondary)
+                        .font(.system(size: 15))
+                    TextField("Zoeken...", text: $viewModel.searchText)
+                        .font(.tfSubheadline())
+                        .foregroundColor(.tfTextPrimary)
+                }
+                .padding(TFSpacing.md)
+                .background(Color.tfBgSubtle)
+                .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+                .padding(.horizontal, TFSpacing.lg)
+                .padding(.bottom, TFSpacing.sm)
+
+                // Filter bar
+                TaskFilterBar(
+                    activeFilter: $viewModel.activeFilter,
+                    sortOption: $viewModel.sortOption
+                )
+
+                Divider()
+                    .padding(.top, TFSpacing.xs)
+
+                // Task list
+                if displayedTasks.isEmpty {
+                    EmptyStateView(
+                        systemImage: "checkmark.square",
+                        title: "Geen taken",
+                        subtitle: "Tik op + om je eerste taak toe te voegen",
+                        buttonLabel: "Taak toevoegen",
+                        buttonAction: { showAddTask = true }
+                    )
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: TFSpacing.sm) {
+                            ForEach(Array(displayedTasks.enumerated()), id: \.element.id) { index, task in
+                                TaskCardView(
+                                    task: task,
+                                    onFocus: { taskForFocus = $0 },
+                                    onEdit: { taskToEdit = $0 },
+                                    onDelete: { context.delete($0) },
+                                    onDuplicate: duplicateTask
+                                )
+                                .padding(.horizontal, TFSpacing.lg)
+                                .transition(.asymmetric(
+                                    insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.97)),
+                                    removal: .move(edge: .leading).combined(with: .opacity)
+                                ))
+                                .animation(
+                                    .spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.055),
+                                    value: displayedTasks.count
+                                )
+                            }
+                            Spacer(minLength: 100)
+                        }
+                        .padding(.top, TFSpacing.md)
+                    }
                 }
             }
+            .background(Color.tfBgPrimary)
         }
         .sheet(isPresented: $showAddTask) {
-            AddEditTaskSheet()
+            AddEditTaskSheet(existingTask: nil)
+        }
+        .sheet(item: $taskToEdit) { task in
+            AddEditTaskSheet(existingTask: task)
+        }
+        .fullScreenCover(item: $taskForFocus) { task in
+            FocusModeView(task: task)
         }
     }
 
-    // MARK: Filter menu
+    // MARK: - Actions
 
-    private var filterMenu: some View {
-        Menu {
-            // Sort
-            Menu("Sort by") {
-                ForEach(TaskSortOrder.allCases, id: \.self) { order in
-                    Button {
-                        sortOrder = order
-                    } label: {
-                        if sortOrder == order {
-                            Label(order.label, systemImage: "checkmark")
-                        } else {
-                            Text(order.label)
-                        }
-                    }
-                }
-            }
-
-            Divider()
-
-            // Filter priority
-            Menu("Priority") {
-                Button("All Priorities") { filterPriority = nil }
-                Divider()
-                ForEach(TaskPriority.allCases, id: \.self) { p in
-                    Button(p.label) { filterPriority = p }
-                }
-            }
-
-            // Filter project
-            if !allProjects.isEmpty {
-                Menu("Project") {
-                    Button("All Projects") { filterProject = nil }
-                    Divider()
-                    ForEach(allProjects.filter { !$0.isArchived }) { proj in
-                        Button(proj.name) { filterProject = proj }
-                    }
-                }
-            }
-
-            // Filter tag
-            if !allTags.isEmpty {
-                Menu("Tag") {
-                    Button("All Tags") { filterTag = nil }
-                    Divider()
-                    ForEach(allTags) { tag in
-                        Button(tag.name) { filterTag = tag }
-                    }
-                }
-            }
-
-            if hasActiveFilters {
-                Divider()
-                Button(role: .destructive) {
-                    filterPriority = nil; filterProject = nil; filterTag = nil
-                } label: {
-                    Label("Clear All Filters", systemImage: "xmark.circle")
-                }
-            }
-        } label: {
-            Image(
-                systemName: hasActiveFilters
-                    ? "line.3.horizontal.decrease.circle.fill"
-                    : "line.3.horizontal.decrease.circle"
-            )
-        }
+    private func duplicateTask(_ task: TFTask) {
+        let copy = TFTask(
+            title: task.title + " (kopie)",
+            notes: task.notes,
+            priority: task.priority,
+            timeBlock: task.timeBlock,
+            dueDate: task.dueDate,
+            dueTime: task.dueTime
+        )
+        copy.tags = task.tags
+        copy.project = task.project
+        context.insert(copy)
     }
-
-    // MARK: Active filters bar
-
-    private var activeFiltersBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if let p = filterPriority {
-                    FilterChip(label: p.label, color: p.color) { filterPriority = nil }
-                }
-                if let proj = filterProject {
-                    FilterChip(label: proj.name, color: proj.color) { filterProject = nil }
-                }
-                if let tag = filterTag {
-                    FilterChip(label: tag.name, color: tag.color) { filterTag = nil }
-                }
-            }
-            .padding(.horizontal)
-        }
-        .padding(.vertical, 10)
-        .background(.regularMaterial)
-    }
-
-    // MARK: Helpers
-
-    private func deleteTasks(at offsets: IndexSet) {
-        for idx in offsets {
-            let task = displayedTasks[idx]
-            NotificationManager.shared.cancelNotification(for: task)
-            modelContext.delete(task)
-        }
-    }
-}
-
-// MARK: - Sort order enum
-
-enum TaskSortOrder: CaseIterable {
-    case dueDate, priority, createdAt
-    var label: String {
-        switch self {
-        case .dueDate:   return "Due Date"
-        case .priority:  return "Priority"
-        case .createdAt: return "Date Created"
-        }
-    }
-}
-
-#Preview {
-    let schema = Schema([TFTask.self, TFProject.self, TFTag.self])
-    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: schema, configurations: [config])
-    return AllTasksView().modelContainer(container)
 }

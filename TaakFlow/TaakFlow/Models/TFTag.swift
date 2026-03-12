@@ -1,22 +1,28 @@
+// TFTag.swift
+// TaakFlow — Vancoillie Studio
+
 import SwiftUI
 import SwiftData
 
 @Model
-final class TFTag {
-    var id: UUID = UUID()
-    var name: String = ""
-    var colorHex: String = "#007AFF"
+class TFTag {
+    var id: UUID
+    var name: String
+    var colorHex: String
+    var sortOrder: Int
 
-    @Relationship(deleteRule: .nullify, inverse: \TFTask.tags)
-    var tasks: [TFTask] = []
+    // Relationship — inverse set on TFTask.tags
+    @Relationship(deleteRule: .nullify)
+    var tasks: [TFTask]
 
-    init(name: String, colorHex: String = "#007AFF") {
+    // MARK: - Init
+    init(name: String, colorHex: String = "#5B6EF5") {
         self.id = UUID()
         self.name = name
         self.colorHex = colorHex
+        self.sortOrder = 0
+        self.tasks = []
     }
 
-    var color: Color {
-        Color(hex: colorHex) ?? .blue
-    }
+    var color: Color { Color(hex: colorHex) }
 }

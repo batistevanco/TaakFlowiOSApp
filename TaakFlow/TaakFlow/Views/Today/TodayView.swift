@@ -1,168 +1,194 @@
+// TodayView.swift
+// TaakFlow — Vancoillie Studio
+
 import SwiftUI
 import SwiftData
 
 struct TodayView: View {
+    @Environment(\.modelContext) private var context
     @Query private var allTasks: [TFTask]
+    @Query(filter: #Predicate<TFProject> { !$0.isArchived }) private var activeProjects: [TFProject]
+
+    @AppStorage("userName") private var userName = ""
+    @AppStorage("currentStreak") private var currentStreak = 0
+
     @State private var showAddTask = false
+    @State private var taskToEdit: TFTask? = nil
+    @State private var taskForFocus: TFTask? = nil
+    var onOpenSettings: (() -> Void)
 
-    // MARK: Computed task lists
-
-    private var overdueTasks: [TFTask] {
-        allTasks.filter { task in
-            guard let due = task.dueDate, !task.isCompleted else { return false }
-            let dueDay = Calendar.current.startOfDay(for: due)
-            let today  = Calendar.current.startOfDay(for: Date())
-            return dueDay < today
-        }
-        .sorted { ($0.dueDate ?? $0.createdAt) < ($1.dueDate ?? $1.createdAt) }
-    }
-
+    // MARK: - Computed
     private var todayTasks: [TFTask] {
-        allTasks.filter { $0.isDueToday }
+        allTasks.filter { task in
+            guard let due = task.dueDate else { return false }
+            return due.isToday
+        }
     }
 
-    private var completedTodayCount: Int { todayTasks.filter { $0.isCompleted }.count }
-    private var totalTodayCount: Int { todayTasks.count }
-
-    private func tasks(for block: TimeBlock) -> [TFTask] {
-        todayTasks
-            .filter { $0.timeBlock == block }
-            .sorted { a, b in
-                if a.isCompleted != b.isCompleted { return !a.isCompleted }
-                guard let ad = a.dueDate, let bd = b.dueDate else { return a.createdAt < b.createdAt }
-                return ad < bd
-            }
+    private var morningTasks: [TFTask] { todayTasks.filter { $0.timeBlock == .morning } }
+    private var afternoonTasks: [TFTask] { todayTasks.filter { $0.timeBlock == .afternoon } }
+    private var eveningTasks: [TFTask] { todayTasks.filter { $0.timeBlock == .evening } }
+    private var unscheduledTasks: [TFTask] {
+        todayTasks.filter { $0.timeBlock == .unscheduled }
     }
 
-    // MARK: Body
+    private var completedToday: Int { todayTasks.filter(\.isDone).count }
+    private var urgentCount: Int { todayTasks.filter { $0.priority == .high && !$0.isDone }.count }
+
+    private var greeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        let name = userName.isEmpty ? "" : ", \(userName)"
+        if hour < 12 { return "Goedemorgen\(name) 👋" }
+        if hour < 18 { return "Goedemiddag\(name) ☀️" }
+        return "Goedenavond\(name) 🌙"
+    }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    progressCard
+            ZStack(alignment: .bottomTrailing) {
+                ScrollView {
+                    LazyVStack(spacing: TFSpacing.xl, pinnedViews: []) {
+                        // Header
+                        headerView
+                            .padding(.horizontal, TFSpacing.lg)
 
-                    if !overdueTasks.isEmpty {
-                        taskSection(
-                            title: "Overdue",
-                            icon: "exclamationmark.triangle.fill",
-                            iconColor: .red,
-                            tasks: overdueTasks
+                        // Hero card
+                        GradientHeroCardView(
+                            completedCount: completedToday,
+                            totalCount: todayTasks.count
                         )
-                    }
+                        .padding(.horizontal, TFSpacing.lg)
 
-                    ForEach(TimeBlock.allCases) { block in
-                        let blockTasks = tasks(for: block)
-                        if !blockTasks.isEmpty {
-                            taskSection(
-                                title: block.rawValue,
-                                icon: block.icon,
-                                iconColor: block.color,
-                                tasks: blockTasks
+                        // Stats row
+                        TodayStatsRow(
+                            streakCount: currentStreak,
+                            urgentCount: urgentCount,
+                            projectsCount: activeProjects.count
+                        )
+                        .padding(.horizontal, TFSpacing.lg)
+
+                        // Time block sections
+                        if todayTasks.isEmpty {
+                            EmptyStateView(
+                                systemImage: "sun.max",
+                                title: "Geen taken vandaag",
+                                subtitle: "Tik op + om taken toe te voegen aan je dag"
                             )
+                            .frame(minHeight: 250)
+                        } else {
+                            if !morningTasks.isEmpty {
+                                TimeBlockSection(
+                                    block: .morning,
+                                    tasks: morningTasks,
+                                    onFocus: { taskForFocus = $0 },
+                                    onEdit: { taskToEdit = $0 },
+                                    onDelete: deleteTask,
+                                    onDuplicate: duplicateTask
+                                )
+                            }
+                            if !afternoonTasks.isEmpty {
+                                TimeBlockSection(
+                                    block: .afternoon,
+                                    tasks: afternoonTasks,
+                                    onFocus: { taskForFocus = $0 },
+                                    onEdit: { taskToEdit = $0 },
+                                    onDelete: deleteTask,
+                                    onDuplicate: duplicateTask
+                                )
+                            }
+                            if !eveningTasks.isEmpty {
+                                TimeBlockSection(
+                                    block: .evening,
+                                    tasks: eveningTasks,
+                                    onFocus: { taskForFocus = $0 },
+                                    onEdit: { taskToEdit = $0 },
+                                    onDelete: deleteTask,
+                                    onDuplicate: duplicateTask
+                                )
+                            }
+                            if !unscheduledTasks.isEmpty {
+                                TimeBlockSection(
+                                    block: .unscheduled,
+                                    tasks: unscheduledTasks,
+                                    onFocus: { taskForFocus = $0 },
+                                    onEdit: { taskToEdit = $0 },
+                                    onDelete: deleteTask,
+                                    onDuplicate: duplicateTask
+                                )
+                            }
                         }
-                    }
 
-                    if todayTasks.isEmpty && overdueTasks.isEmpty {
-                        EmptyStateView(
-                            icon: "checkmark.circle.dashed",
-                            title: "No tasks for today",
-                            subtitle: "Tap + to add your first task"
-                        )
+                        Spacer(minLength: 100)
                     }
+                    .padding(.top, TFSpacing.lg)
                 }
-                .padding(.horizontal)
-                .padding(.top, 8)
-                .padding(.bottom, 100)
-            }
-            .navigationTitle("Today")
-            .overlay(alignment: .bottomTrailing) {
-                FloatingActionButton { showAddTask = true }
+                .background(Color.tfBgPrimary)
+
+                // FAB
+                FABButton { showAddTask = true }
+                    .padding(TFSpacing.xl)
             }
         }
         .sheet(isPresented: $showAddTask) {
-            AddEditTaskSheet(initialDueDate: Calendar.current.startOfDay(for: Date()))
+            AddEditTaskSheet(existingTask: nil)
+        }
+        .sheet(item: $taskToEdit) { task in
+            AddEditTaskSheet(existingTask: task)
+        }
+        .fullScreenCover(item: $taskForFocus) { task in
+            FocusModeView(task: task)
         }
     }
 
-    // MARK: Subviews
+    // MARK: - Header
 
-    private var progressCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(Date().formatted(.dateTime.weekday(.wide).month().day().year()))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(
-                        totalTodayCount == 0
-                            ? "No tasks scheduled"
-                            : "\(completedTodayCount) of \(totalTodayCount) tasks completed"
-                    )
-                    .font(.subheadline.weight(.medium))
-                }
-                Spacer()
-                Text(
-                    totalTodayCount == 0
-                        ? "–"
-                        : "\(Int(Double(completedTodayCount) / Double(totalTodayCount) * 100))%"
-                )
-                .font(.title2.bold())
-            }
-            ProgressView(
-                value: Double(completedTodayCount),
-                total: Double(max(totalTodayCount, 1))
-            )
-            .tint(.accentColor)
-        }
-        .padding()
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-
-    private func taskSection(
-        title: String,
-        icon: String,
-        iconColor: Color,
-        tasks: [TFTask]
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Section header
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .foregroundStyle(iconColor)
-                    .font(.caption.weight(.semibold))
-                Text(title.uppercased())
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+    private var headerView: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: TFSpacing.xs) {
+                Text(Date().fullDateString)
+                    .font(.tfCaption())
                     .tracking(0.5)
-                Spacer()
-                let pending = tasks.filter { !$0.isCompleted }.count
-                if pending > 0 {
-                    Text("\(pending)")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
+                    .foregroundColor(.tfTextSecondary)
+                    .textCase(.uppercase)
 
-            // Task cards
-            VStack(spacing: 0) {
-                ForEach(Array(tasks.enumerated()), id: \.element.id) { idx, task in
-                    TaskRowView(task: task)
-                    if idx < tasks.count - 1 {
-                        Divider().padding(.leading, 44)
-                    }
-                }
+                Text(greeting)
+                    .font(.tfLargeTitle())
+                    .foregroundColor(.tfTextPrimary)
+                    .tracking(-1.0)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            Spacer()
+            Button(action: onOpenSettings) {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(.tfTextSecondary)
+                    .frame(width: 40, height: 40)
+                    .background(Color.tfBgCard)
+                    .clipShape(Circle())
+                    .cardShadow()
+            }
+            .accessibilityLabel("Instellingen")
         }
     }
-}
 
-#Preview {
-    let schema = Schema([TFTask.self, TFProject.self, TFTag.self])
-    let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: schema, configurations: [config])
-    return TodayView().modelContainer(container)
+    // MARK: - Actions
+
+    private func deleteTask(_ task: TFTask) {
+        context.delete(task)
+    }
+
+    private func duplicateTask(_ task: TFTask) {
+        let copy = TFTask(
+            title: task.title + " (kopie)",
+            notes: task.notes,
+            priority: task.priority,
+            timeBlock: task.timeBlock,
+            dueDate: task.dueDate,
+            dueTime: task.dueTime
+        )
+        copy.tags = task.tags
+        copy.project = task.project
+        context.insert(copy)
+    }
 }

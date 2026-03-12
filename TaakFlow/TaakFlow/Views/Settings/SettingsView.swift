@@ -1,128 +1,388 @@
-import SwiftUI
-import UserNotifications
+// SettingsView.swift
+// TaakFlow — Vancoillie Studio
 
-// MARK: - Settings
+import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
-    @AppStorage("appTheme") private var appTheme: String = "system"
+    @Environment(\.modelContext) private var context
+    @Environment(\.dismiss) private var dismiss
+
+    // MARK: - AppStorage
+    @AppStorage("checkinEnabled")       private var checkinEnabled = true
+    @AppStorage("checkinTime")          private var checkinTimeStr = "08:00"
+    @AppStorage("checkinShowProjects")  private var checkinShowProjects = true
+    @AppStorage("checkinShowMood")      private var checkinShowMood = true
+
+    @AppStorage("notificationsEnabled") private var notificationsEnabled = true
+    @AppStorage("dailySummaryEnabled")  private var dailySummaryEnabled = true
+    @AppStorage("dailySummaryTime")     private var dailySummaryTimeStr = "20:00"
+    @AppStorage("overdueReminders")     private var overdueReminders = true
+
+    @AppStorage("pomodoroMinutes")      private var pomodoroMinutes = 25
+    @AppStorage("shortBreakMinutes")    private var shortBreakMinutes = 5
+    @AppStorage("longBreakMinutes")     private var longBreakMinutes = 15
+    @AppStorage("autoStartBreaks")      private var autoStartBreaks = false
+
+    @AppStorage("colorScheme")          private var colorSchemeRaw = "system"
+    @AppStorage("userName")             private var userName = ""
+
+    @AppStorage("currentStreak")        private var currentStreak = 0
+    @AppStorage("longestStreak")        private var longestStreak = 0
+
+    @State private var showResetAlert = false
+    @State private var showAbout = false
+    @State private var showHelp = false
+
+    // Time picker values
+    private let checkinTimes = ["07:30", "08:00", "08:30", "09:00"]
+    private let summaryTimes = ["19:00", "20:00", "21:00"]
 
     var body: some View {
         NavigationStack {
-            List {
-                // Appearance
-                Section("Appearance") {
+            ScrollView {
+                VStack(spacing: TFSpacing.xl) {
+                    // Header
                     HStack {
-                        Label("Theme", systemImage: "circle.lefthalf.filled")
+                        Text("Instellingen ⚙️")
+                            .font(.tfLargeTitle())
+                            .foregroundColor(.tfTextPrimary)
+                            .tracking(-1.0)
                         Spacer()
-                        Picker("Theme", selection: $appTheme) {
-                            Text("Light").tag("light")
-                            Text("Dark").tag("dark")
-                            Text("System").tag("system")
+                    }
+                    .padding(.horizontal, TFSpacing.lg)
+                    .padding(.top, TFSpacing.lg)
+
+                    // Streak badge
+                    HStack(spacing: TFSpacing.md) {
+                        Text("🔥")
+                            .font(.system(size: 20))
+                        Text("\(currentStreak) dagen streak")
+                            .font(.tfHeadline())
+                            .foregroundColor(Color(hex: "#D97706"))
+                        Text("·")
+                            .foregroundColor(.tfTextSecondary)
+                        Text("Blijf consistent!")
+                            .font(.tfSubheadline())
+                            .foregroundColor(.tfTextSecondary)
+                        Spacer()
+                    }
+                    .padding(TFSpacing.md)
+                    .background(Color(hex: "#FFF7ED"))
+                    .clipShape(RoundedRectangle(cornerRadius: TFRadius.card))
+                    .padding(.horizontal, TFSpacing.lg)
+
+                    // MARK: Check-in
+                    settingsSection("Ochtend Check-in") {
+                        toggleRow(title: "Check-in inschakelen", subtitle: "Dagelijkse ochtend vragenlijst", isOn: $checkinEnabled)
+                        Divider().padding(.leading, TFSpacing.lg)
+                        if checkinEnabled {
+                            timePickerRow(title: "Tijdstip", options: checkinTimes, selection: $checkinTimeStr)
+                            Divider().padding(.leading, TFSpacing.lg)
+                            toggleRow(title: "Stemming tonen", subtitle: "Mood vraag in check-in", isOn: $checkinShowMood)
+                            Divider().padding(.leading, TFSpacing.lg)
+                            toggleRow(title: "Projecten tonen", subtitle: "Vraag welke projecten vandaag", isOn: $checkinShowProjects)
                         }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                    }
-                }
-
-                // Organisation
-                Section("Organisation") {
-                    NavigationLink {
-                        TagsManagementView()
-                    } label: {
-                        Label("Manage Tags", systemImage: "tag")
-                    }
-                }
-
-                // Notifications
-                Section("Notifications") {
-                    NavigationLink {
-                        NotificationSettingsView()
-                    } label: {
-                        Label("Notification Settings", systemImage: "bell")
-                    }
-                }
-
-                // About
-                Section("About") {
-                    LabeledContent("App", value: "TaakFlow")
-                    LabeledContent("Studio", value: "Vancoillie Studio")
-                    LabeledContent("Version", value: "1.0.0")
-                    LabeledContent("Build", value: "1")
-                    Link(destination: URL(string: "https://vancoilliestudio.be/privacy")!) {
-                        Label("Privacy Policy", systemImage: "hand.raised")
-                    }
-                    Link(destination: URL(string: "mailto:support@vancoilliestudio.be")!) {
-                        Label("Contact Support", systemImage: "envelope")
-                    }
-                }
-
-                Section {
-                    Text("TaakFlow stores all data locally on your device. No data is sent to any server. No accounts required.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("Settings")
-        }
-    }
-}
-
-// MARK: - Notification Settings
-
-struct NotificationSettingsView: View {
-    // @Observable singleton — @State holds the reference so SwiftUI tracks property access
-    @State private var notificationManager = NotificationManager.shared
-
-    var body: some View {
-        List {
-            Section("Status") {
-                switch notificationManager.authorizationStatus {
-                case .authorized, .provisional:
-                    HStack(spacing: 10) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                        Text("Notifications are enabled")
                     }
 
-                case .denied:
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 10) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.red)
-                            Text("Notifications are disabled")
+                    // MARK: Notifications
+                    settingsSection("Meldingen") {
+                        toggleRow(title: "Taak reminders", subtitle: "Push notificaties voor taken", isOn: $notificationsEnabled)
+                        Divider().padding(.leading, TFSpacing.lg)
+                        toggleRow(title: "Dagelijkse samenvatting", subtitle: "Elke avond overzicht", isOn: $dailySummaryEnabled)
+                        if dailySummaryEnabled {
+                            Divider().padding(.leading, TFSpacing.lg)
+                            timePickerRow(title: "Tijd samenvatting", options: summaryTimes, selection: $dailySummaryTimeStr)
                         }
-                        Text("Open iOS Settings to enable notifications for TaakFlow.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button("Open Settings") {
-                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                        Divider().padding(.leading, TFSpacing.lg)
+                        toggleRow(title: "Overdue reminders", subtitle: "Herinnering voor verlopen taken", isOn: $overdueReminders)
+                    }
+
+                    // MARK: Focus & Pomodoro
+                    settingsSection("Focus & Pomodoro") {
+                        stepperRow(title: "Focus duur", value: $pomodoroMinutes, range: 5...60, step: 5, unit: "min")
+                        Divider().padding(.leading, TFSpacing.lg)
+                        stepperRow(title: "Korte pauze", value: $shortBreakMinutes, range: 1...30, step: 1, unit: "min")
+                        Divider().padding(.leading, TFSpacing.lg)
+                        stepperRow(title: "Lange pauze", value: $longBreakMinutes, range: 5...60, step: 5, unit: "min")
+                        Divider().padding(.leading, TFSpacing.lg)
+                        toggleRow(title: "Auto-start pauze", subtitle: "Automatisch doorgaan", isOn: $autoStartBreaks)
+                    }
+
+                    // MARK: Appearance
+                    settingsSection("Uiterlijk") {
+                        VStack(alignment: .leading, spacing: TFSpacing.sm) {
+                            Text("Thema")
+                                .font(.tfSubheadline())
+                                .foregroundColor(.tfTextPrimary)
+                                .padding(.horizontal, TFSpacing.lg)
+                            Picker("", selection: $colorSchemeRaw) {
+                                Text("Systeem").tag("system")
+                                Text("Licht").tag("light")
+                                Text("Donker").tag("dark")
+                            }
+                            .pickerStyle(.segmented)
+                            .padding(.horizontal, TFSpacing.lg)
+                        }
+                        .padding(.vertical, TFSpacing.md)
+
+                        Divider().padding(.leading, TFSpacing.lg)
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Naam")
+                                    .font(.tfSubheadline())
+                                    .foregroundColor(.tfTextPrimary)
+                            }
+                            Spacer()
+                            TextField("Naam", text: $userName)
+                                .font(.tfSubheadline())
+                                .foregroundColor(.tfTextSecondary)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        .padding(.horizontal, TFSpacing.lg)
+                        .padding(.vertical, TFSpacing.md)
+                    }
+
+                    // MARK: Data
+                    settingsSection("Data") {
+                        Button(action: { }) {
+                            HStack {
+                                Label("Exporteer taken", systemImage: "square.and.arrow.up")
+                                    .font(.tfSubheadline())
+                                    .foregroundColor(.tfAccent)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.tfTextSecondary)
+                            }
+                            .padding(.horizontal, TFSpacing.lg)
+                            .padding(.vertical, TFSpacing.md)
+                        }
+                        .buttonStyle(.plain)
+
+                        Divider().padding(.leading, TFSpacing.lg)
+
+                        Button(action: { showResetAlert = true }) {
+                            HStack {
+                                Label("Reset alle data", systemImage: "trash")
+                                    .font(.tfSubheadline())
+                                    .foregroundColor(.tfPriorityHigh)
+                                Spacer()
+                            }
+                            .padding(.horizontal, TFSpacing.lg)
+                            .padding(.vertical, TFSpacing.md)
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    // MARK: About
+                    settingsSection("Over") {
+                        HStack {
+                            Text("Over TaakFlow")
+                                .font(.tfSubheadline())
+                                .foregroundColor(.tfTextPrimary)
+                            Spacer()
+                            Text("v1.0")
+                                .font(.tfCaption2())
+                                .foregroundColor(.tfTextSecondary)
+                        }
+                        .padding(.horizontal, TFSpacing.lg)
+                        .padding(.vertical, TFSpacing.md)
+
+                        Divider().padding(.leading, TFSpacing.lg)
+
+                        Link(destination: URL(string: "https://vancoilliestudio.be")!) {
+                            HStack {
+                                Label("Vancoillie Studio", systemImage: "globe")
+                                    .font(.tfSubheadline())
+                                    .foregroundColor(.tfAccent)
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.tfTextSecondary)
+                            }
+                            .padding(.horizontal, TFSpacing.lg)
+                            .padding(.vertical, TFSpacing.md)
+                        }
+                    }
+
+                    // MARK: Support
+                    settingsSection("Support") {
+                        Button(action: { showHelp = true }) {
+                            HStack {
+                                Label("Help & Uitleg", systemImage: "questionmark.circle")
+                                    .font(.tfSubheadline())
+                                    .foregroundColor(.tfTextPrimary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.tfTextSecondary)
+                            }
+                            .padding(.horizontal, TFSpacing.lg)
+                            .padding(.vertical, TFSpacing.md)
+                        }
+                        .buttonStyle(.plain)
+
+                        Divider().padding(.leading, TFSpacing.lg)
+
+                        Button(action: {
+                            if let url = URL(string: "mailto:support@vancoilliestudio.be?subject=TaakFlow%20Support") {
                                 UIApplication.shared.open(url)
                             }
+                        }) {
+                            HStack {
+                                Label("Contact opnemen", systemImage: "envelope")
+                                    .font(.tfSubheadline())
+                                    .foregroundColor(.tfAccent)
+                                Spacer()
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.tfTextSecondary)
+                            }
+                            .padding(.horizontal, TFSpacing.lg)
+                            .padding(.vertical, TFSpacing.md)
                         }
+                        .buttonStyle(.plain)
                     }
 
-                case .notDetermined:
-                    Button("Enable Notifications") {
-                        Task { await notificationManager.requestPermission() }
-                    }
-
-                @unknown default:
-                    Text("Notification status unknown")
-                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 100)
                 }
             }
-
-            Section("How it works") {
-                Text("Reminders are sent at the exact time you set on a task. You must enable 'Specific time' and 'Reminder notification' when creating or editing a task.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            .background(Color.tfBgPrimary)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Klaar") { dismiss() }
+                        .font(.tfSubheadline())
+                        .foregroundColor(.tfAccent)
+                }
             }
         }
-        .navigationTitle("Notifications")
-        .onAppear { notificationManager.checkAuthorizationStatus() }
+        .sheet(isPresented: $showHelp) {
+            HelpView()
+        }
+        .alert("Reset alle data?", isPresented: $showResetAlert) {
+            Button("Reset", role: .destructive) { }
+            Button("Annuleer", role: .cancel) {}
+        } message: {
+            Text("Alle taken, projecten en instellingen worden permanent verwijderd.")
+        }
     }
-}
 
-#Preview {
-    SettingsView()
+    // MARK: - Helpers
+
+    @ViewBuilder
+    private func settingsSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: TFSpacing.sm) {
+            Text(title.uppercased())
+                .font(.tfCaption())
+                .tracking(0.8)
+                .foregroundColor(.tfTextSecondary)
+                .padding(.horizontal, TFSpacing.lg)
+
+            VStack(spacing: 0) {
+                content()
+            }
+            .background(Color.tfBgCard)
+            .clipShape(RoundedRectangle(cornerRadius: TFRadius.card))
+            .cardShadow()
+            .padding(.horizontal, TFSpacing.lg)
+        }
+    }
+
+    @ViewBuilder
+    private func toggleRow(title: String, subtitle: String? = nil, isOn: Binding<Bool>) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.tfSubheadline())
+                    .foregroundColor(.tfTextPrimary)
+                if let sub = subtitle {
+                    Text(sub)
+                        .font(.tfCaption2())
+                        .foregroundColor(.tfTextSecondary)
+                }
+            }
+            Spacer()
+            CustomToggle(isOn: isOn)
+        }
+        .padding(.horizontal, TFSpacing.lg)
+        .padding(.vertical, TFSpacing.md)
+    }
+
+    @ViewBuilder
+    private func timePickerRow(title: String, options: [String], selection: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: TFSpacing.sm) {
+            Text(title)
+                .font(.tfSubheadline())
+                .foregroundColor(.tfTextPrimary)
+                .padding(.horizontal, TFSpacing.lg)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: TFSpacing.sm) {
+                    ForEach(options, id: \.self) { time in
+                        Button(action: { selection.wrappedValue = time }) {
+                            Text(time)
+                                .font(.tfCaption())
+                                .foregroundColor(selection.wrappedValue == time ? .white : .tfTextSecondary)
+                                .padding(.horizontal, TFSpacing.md)
+                                .padding(.vertical, TFSpacing.sm)
+                                .background(selection.wrappedValue == time ? Color.tfAccent : Color.tfBgSubtle)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(SpringButtonStyle())
+                    }
+                }
+                .padding(.horizontal, TFSpacing.lg)
+            }
+        }
+        .padding(.vertical, TFSpacing.md)
+    }
+
+    @ViewBuilder
+    private func stepperRow(title: String, value: Binding<Int>, range: ClosedRange<Int>, step: Int, unit: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.tfSubheadline())
+                .foregroundColor(.tfTextPrimary)
+            Spacer()
+            HStack(spacing: TFSpacing.sm) {
+                Button(action: {
+                    if value.wrappedValue - step >= range.lowerBound {
+                        value.wrappedValue -= step
+                    }
+                }) {
+                    Image(systemName: "minus")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.tfAccent)
+                        .frame(width: 28, height: 28)
+                        .background(Color.tfBgSubtle)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(SpringButtonStyle())
+
+                Text("\(value.wrappedValue) \(unit)")
+                    .font(.tfCaption())
+                    .foregroundColor(.tfTextPrimary)
+                    .frame(minWidth: 50, alignment: .center)
+
+                Button(action: {
+                    if value.wrappedValue + step <= range.upperBound {
+                        value.wrappedValue += step
+                    }
+                }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.tfAccent)
+                        .frame(width: 28, height: 28)
+                        .background(Color.tfBgSubtle)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(SpringButtonStyle())
+            }
+        }
+        .padding(.horizontal, TFSpacing.lg)
+        .padding(.vertical, TFSpacing.md)
+    }
 }

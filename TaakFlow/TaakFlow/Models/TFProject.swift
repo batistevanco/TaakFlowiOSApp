@@ -1,37 +1,79 @@
+// TFProject.swift
+// TaakFlow — Vancoillie Studio
+
 import SwiftUI
 import SwiftData
 
 @Model
-final class TFProject {
-    var id: UUID = UUID()
-    var name: String = ""
-    var colorHex: String = "#007AFF"
-    var icon: String = "folder"
-    var isArchived: Bool = false
-    var createdAt: Date = Date()
+class TFProject {
+    var id: UUID
+    var name: String
+    var emoji: String
+    var colorHex: String
+    var notes: String
+    var createdAt: Date
+    var deadline: Date?
+    var isArchived: Bool
+    var sortOrder: Int
 
-    @Relationship(deleteRule: .nullify, inverse: \TFTask.project)
-    var tasks: [TFTask] = []
+    // Relationship — inverse set on TFTask.project
+    @Relationship(deleteRule: .cascade)
+    var tasks: [TFTask]
 
-    init(name: String, colorHex: String = "#007AFF", icon: String = "folder") {
+    // MARK: - Init
+    init(
+        name: String,
+        emoji: String = "📁",
+        colorHex: String = "#5B6EF5",
+        notes: String = "",
+        deadline: Date? = nil
+    ) {
         self.id = UUID()
         self.name = name
+        self.emoji = emoji
         self.colorHex = colorHex
-        self.icon = icon
-        self.isArchived = false
+        self.notes = notes
         self.createdAt = Date()
+        self.deadline = deadline
+        self.isArchived = false
+        self.sortOrder = 0
+        self.tasks = []
     }
 
-    var color: Color {
-        Color(hex: colorHex) ?? .blue
+    // MARK: - Computed
+    var totalTasks: Int { tasks.count }
+
+    var completedTasks: Int { tasks.filter(\.isDone).count }
+
+    var progressPercentage: Double {
+        guard totalTasks > 0 else { return 0 }
+        return Double(completedTasks) / Double(totalTasks)
     }
 
-    var completedCount: Int {
-        tasks.filter { $0.isCompleted }.count
+    var isOverdue: Bool {
+        guard let dl = deadline, !isArchived else { return false }
+        return dl < Date()
     }
 
-    var progress: Double {
-        guard !tasks.isEmpty else { return 0 }
-        return Double(completedCount) / Double(tasks.count)
+    var color: Color { Color(hex: colorHex) }
+
+    var deadlineUrgency: DeadlineUrgency {
+        guard let dl = deadline else { return .none }
+        let days = dl.daysUntil()
+        if days < 0 { return .overdue }
+        if days <= 3 { return .soon }
+        return .ok
+    }
+
+    enum DeadlineUrgency {
+        case none, ok, soon, overdue
+        var color: Color {
+            switch self {
+            case .none:    return .tfTextSecondary
+            case .ok:      return .tfPriorityLow
+            case .soon:    return .tfPriorityMed
+            case .overdue: return .tfPriorityHigh
+            }
+        }
     }
 }

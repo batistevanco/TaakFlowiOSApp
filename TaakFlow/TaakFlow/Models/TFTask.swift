@@ -1,29 +1,34 @@
+// TFTask.swift
+// TaakFlow — Vancoillie Studio
+
 import SwiftUI
 import SwiftData
 
-// MARK: - Enums
+// MARK: - Supporting Types
 
-enum TaskPriority: String, Codable, CaseIterable {
-    case high
-    case medium
-    case low
-    case none
+enum TFPriority: String, Codable, CaseIterable, Identifiable {
+    case none   = "none"
+    case low    = "low"
+    case medium = "medium"
+    case high   = "high"
 
-    var label: String {
-        switch self {
-        case .high:   return "High"
-        case .medium: return "Medium"
-        case .low:    return "Low"
-        case .none:   return "None"
-        }
-    }
+    var id: String { rawValue }
 
     var color: Color {
         switch self {
-        case .high:   return .red
-        case .medium: return .orange
-        case .low:    return .green
-        case .none:   return Color(.systemGray4)
+        case .none:   return .tfPriorityNone
+        case .low:    return .tfPriorityLow
+        case .medium: return .tfPriorityMed
+        case .high:   return .tfPriorityHigh
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .none:   return "Geen"
+        case .low:    return "Laag"
+        case .medium: return "Middel"
+        case .high:   return "Hoog"
         }
     }
 
@@ -37,84 +42,136 @@ enum TaskPriority: String, Codable, CaseIterable {
     }
 }
 
-enum TimeBlock: String, CaseIterable, Identifiable {
-    case morning      = "Morning"
-    case afternoon    = "Afternoon"
-    case evening      = "Evening"
-    case unscheduled  = "Unscheduled"
+enum TFTimeBlock: String, Codable, CaseIterable, Identifiable {
+    case morning      = "morning"
+    case afternoon    = "afternoon"
+    case evening      = "evening"
+    case unscheduled  = "unscheduled"
 
     var id: String { rawValue }
 
-    var icon: String {
+    var emoji: String {
         switch self {
-        case .morning:     return "sunrise.fill"
-        case .afternoon:   return "sun.max.fill"
-        case .evening:     return "moon.stars.fill"
-        case .unscheduled: return "clock"
+        case .morning:     return "🌅"
+        case .afternoon:   return "☀️"
+        case .evening:     return "🌙"
+        case .unscheduled: return "📋"
         }
     }
 
-    var color: Color {
+    var label: String {
         switch self {
-        case .morning:     return .orange
-        case .afternoon:   return .yellow
-        case .evening:     return .indigo
-        case .unscheduled: return .gray
+        case .morning:     return "Ochtend"
+        case .afternoon:   return "Middag"
+        case .evening:     return "Avond"
+        case .unscheduled: return "Ongepland"
         }
     }
+
+    var timeRange: String {
+        switch self {
+        case .morning:     return "06:00–12:00"
+        case .afternoon:   return "12:00–17:00"
+        case .evening:     return "17:00–23:59"
+        case .unscheduled: return ""
+        }
+    }
+
+    static func from(hour: Int) -> TFTimeBlock {
+        switch hour {
+        case 6..<12: return .morning
+        case 12..<17: return .afternoon
+        case 17..<24: return .evening
+        default: return .unscheduled
+        }
+    }
+}
+
+struct TFSubtask: Codable, Identifiable, Hashable {
+    var id: UUID = UUID()
+    var title: String
+    var isDone: Bool = false
+}
+
+struct TFRecurrenceRule: Codable, Hashable {
+    enum Frequency: String, Codable {
+        case daily, weekly, monthly
+    }
+    var frequency: Frequency
+    var interval: Int = 1
+    var daysOfWeek: [Int]?
+    var endDate: Date?
 }
 
 // MARK: - TFTask Model
 
 @Model
-final class TFTask {
-    var id: UUID = UUID()
-    var title: String = ""
-    var notes: String = ""
-    var isCompleted: Bool = false
-    var priority: TaskPriority = TaskPriority.none
-    var dueDate: Date? = nil
-    var hasTime: Bool = false
-    var hasReminder: Bool = false
-    var notificationID: String? = nil
-    var createdAt: Date = Date()
+class TFTask {
+    var id: UUID
+    var title: String
+    var notes: String
+    var isDone: Bool
+    var createdAt: Date
+    var dueDate: Date?
+    var dueTime: Date?
+    var completedAt: Date?
+    var priority: TFPriority
+    var timeBlock: TFTimeBlock
+    var isRecurring: Bool
 
-    var project: TFProject? = nil
-    var tags: [TFTag] = []
+    // SwiftData handles Codable value types natively — no transformer needed
+    var recurrenceRule: TFRecurrenceRule?
+    var subtasks: [TFSubtask]
 
-    init(title: String) {
+    var estimatedMinutes: Int?
+    var actualMinutes: Int?
+
+    // Relationships
+    @Relationship(deleteRule: .nullify, inverse: \TFProject.tasks)
+    var project: TFProject?
+
+    @Relationship(deleteRule: .nullify, inverse: \TFTag.tasks)
+    var tags: [TFTag]
+
+    // MARK: - Init
+    init(
+        title: String,
+        notes: String = "",
+        priority: TFPriority = .none,
+        timeBlock: TFTimeBlock = .unscheduled,
+        dueDate: Date? = nil,
+        dueTime: Date? = nil,
+        isRecurring: Bool = false
+    ) {
         self.id = UUID()
         self.title = title
-        self.notes = ""
-        self.isCompleted = false
-        self.priority = .none
-        self.hasTime = false
-        self.hasReminder = false
+        self.notes = notes
+        self.isDone = false
         self.createdAt = Date()
+        self.dueDate = dueDate
+        self.dueTime = dueTime
+        self.priority = priority
+        self.timeBlock = timeBlock
+        self.isRecurring = isRecurring
+        self.subtasks = []
+        self.tags = []
     }
 
-    // MARK: Computed
-
+    // MARK: - Computed
     var isOverdue: Bool {
-        guard let dueDate, !isCompleted else { return false }
-        if hasTime {
-            return dueDate < Date()
-        } else {
-            return Calendar.current.startOfDay(for: dueDate) < Calendar.current.startOfDay(for: Date())
-        }
+        guard let due = dueDate, !isDone else { return false }
+        return due < Calendar.current.startOfDay(for: Date()) && !due.isToday
     }
 
-    var isDueToday: Bool {
-        guard let dueDate else { return false }
-        return Calendar.current.isDateInToday(dueDate)
+    var isToday: Bool {
+        guard let due = dueDate else { return false }
+        return due.isToday
     }
 
-    var timeBlock: TimeBlock {
-        guard hasTime, let dueDate else { return .unscheduled }
-        let hour = Calendar.current.component(.hour, from: dueDate)
-        if (6...11).contains(hour)  { return .morning }
-        if (12...16).contains(hour) { return .afternoon }
-        if (17...23).contains(hour) { return .evening }
-        return .unscheduled
+    var progressPercentage: Double {
+        guard !subtasks.isEmpty else { return isDone ? 1.0 : 0.0 }
+        let done = subtasks.filter(\.isDone).count
+        return Double(done) / Double(subtasks.count)
     }
 }
+
