@@ -258,7 +258,7 @@ struct SettingsView: View {
             HelpView()
         }
         .alert("Reset alle data?", isPresented: $showResetAlert) {
-            Button("Reset", role: .destructive) { }
+            Button("Reset", role: .destructive) { resetAllData() }
             Button("Annuleer", role: .cancel) {}
         } message: {
             Text("Alle taken, projecten en instellingen worden permanent verwijderd.")
@@ -266,6 +266,18 @@ struct SettingsView: View {
     }
 
     // MARK: - Helpers
+
+    private func resetAllData() {
+        try? context.delete(model: TFTask.self)
+        try? context.delete(model: TFProject.self)
+        try? context.delete(model: TFTag.self)
+        try? context.delete(model: CheckInEntry.self)
+
+        currentStreak = 0
+        longestStreak = 0
+        UserDefaults.standard.removeObject(forKey: "lastStreakDate")
+        userName = ""
+    }
 
     @ViewBuilder
     private func settingsSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
