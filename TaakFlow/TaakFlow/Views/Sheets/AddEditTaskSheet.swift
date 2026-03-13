@@ -20,8 +20,8 @@ struct AddEditTaskSheet: View {
     @State private var showNotes: Bool = false
     @State private var priority: TFPriority = .none
     @State private var timeBlock: TFTimeBlock = .unscheduled
-    @State private var hasDueDate: Bool = false
-    @State private var dueDate: Date = Date()
+    @State private var hasDueDate: Bool
+    @State private var dueDate: Date
     @State private var hasDueTime: Bool = false
     @State private var dueTime: Date = Date.today(hour: 9)
     @State private var hasReminder: Bool = false
@@ -42,6 +42,8 @@ struct AddEditTaskSheet: View {
     init(existingTask: TFTask?, defaultProject: TFProject? = nil) {
         self.existingTask = existingTask
         self.defaultProject = defaultProject
+        _hasDueDate = State(initialValue: existingTask?.dueDate != nil || existingTask == nil)
+        _dueDate = State(initialValue: existingTask?.dueDate ?? Calendar.current.startOfDay(for: Date()))
     }
 
     var body: some View {
@@ -184,6 +186,7 @@ struct AddEditTaskSheet: View {
             .background(Color.tfBgCard)
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)
+            .dismissKeyboardOnInteraction()
         }
         .onAppear(perform: populateIfEditing)
         .onChange(of: hasDueDate) { _, newValue in
@@ -456,7 +459,12 @@ struct AddEditTaskSheet: View {
         showNotes = !task.notes.isEmpty
         priority = task.priority
         timeBlock = task.timeBlock
-        if let due = task.dueDate { hasDueDate = true; dueDate = due }
+        if let due = task.dueDate {
+            hasDueDate = true
+            dueDate = due
+        } else {
+            hasDueDate = false
+        }
         if let t = task.dueTime { hasDueTime = true; dueTime = t }
         selectedProject = task.project
         selectedTags = task.tags

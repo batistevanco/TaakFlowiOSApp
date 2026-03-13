@@ -4,6 +4,7 @@
 import SwiftUI
 
 struct OnboardingView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("userName") private var userName = ""
     @AppStorage("checkinTime") private var checkinTimeStr = "08:00"
@@ -18,7 +19,7 @@ struct OnboardingView: View {
         ZStack {
             // Animated gradient background
             LinearGradient(
-                colors: [Color(hex: "#EEF0FF"), Color(hex: "#F5F0FF"), Color(hex: "#EEF5FF")],
+                colors: onboardingBackgroundColors,
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -79,6 +80,7 @@ struct OnboardingView: View {
                 .padding(.bottom, TFSpacing.xxxl + TFSpacing.lg)
             }
         }
+        .dismissKeyboardOnInteraction()
     }
 
     // MARK: - Pages
@@ -162,9 +164,11 @@ struct OnboardingView: View {
                         .foregroundColor(.tfTextSecondary)
                     TextField("Je naam", text: $localName)
                         .font(.tfSubheadline())
+                        .foregroundColor(.tfTextPrimary)
                         .padding(TFSpacing.md)
-                        .background(Color.white)
+                        .background(Color.tfBgCard)
                         .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+                        .overlay(inputBorder)
                         .cardShadow()
                 }
 
@@ -179,11 +183,17 @@ struct OnboardingView: View {
                             Button(action: { checkinTimeStr = time }) {
                                 Text(time)
                                     .font(.tfCaption())
-                                    .foregroundColor(checkinTimeStr == time ? .white : .tfTextSecondary)
+                                    .foregroundColor(checkinTimeStr == time ? .white : .tfTextPrimary)
                                     .padding(.horizontal, TFSpacing.md)
                                     .padding(.vertical, TFSpacing.sm)
-                                    .background(checkinTimeStr == time ? Color.tfAccent : Color.white)
+                                    .background(checkinTimeStr == time ? Color.tfAccent : Color.tfBgCard)
                                     .clipShape(Capsule())
+                                    .overlay {
+                                        if checkinTimeStr != time {
+                                            Capsule()
+                                                .strokeBorder(Color.tfBorderLight, lineWidth: 1)
+                                        }
+                                    }
                                     .shadow(color: checkinTimeStr == time ? Color.tfAccent.opacity(0.3) : .black.opacity(0.04),
                                             radius: 6)
                             }
@@ -206,8 +216,9 @@ struct OnboardingView: View {
                     CustomToggle(isOn: $notificationsEnabled)
                 }
                 .padding(TFSpacing.md)
-                .background(Color.white)
+                .background(Color.tfBgCard)
                 .clipShape(RoundedRectangle(cornerRadius: TFRadius.input))
+                .overlay(inputBorder)
                 .cardShadow()
             }
             .padding(.horizontal, TFSpacing.xl)
@@ -237,9 +248,25 @@ struct OnboardingView: View {
             Spacer()
         }
         .padding(TFSpacing.md)
-        .background(Color.white)
+        .background(Color.tfBgCard)
         .clipShape(RoundedRectangle(cornerRadius: TFRadius.card))
+        .overlay(
+            RoundedRectangle(cornerRadius: TFRadius.card)
+                .strokeBorder(Color.tfBorderLight, lineWidth: 1)
+        )
         .cardShadow()
+    }
+
+    private var onboardingBackgroundColors: [Color] {
+        if colorScheme == .dark {
+            return [Color(hex: "#0F172A"), Color(hex: "#141B34"), Color(hex: "#111827")]
+        }
+        return [Color(hex: "#EEF0FF"), Color(hex: "#F5F0FF"), Color(hex: "#EEF5FF")]
+    }
+
+    private var inputBorder: some View {
+        RoundedRectangle(cornerRadius: TFRadius.input)
+            .strokeBorder(Color.tfBorderLight, lineWidth: 1)
     }
 
     // MARK: - Complete

@@ -104,6 +104,7 @@ struct MorningCheckInView: View {
             }
         }
         .interactiveDismissDisabled()
+        .dismissKeyboardOnInteraction()
     }
 
     // MARK: - Complete

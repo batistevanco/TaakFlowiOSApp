@@ -5,14 +5,45 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
+    @Query private var allTasks: [TFTask]
     @Query private var checkInEntries: [CheckInEntry]
 
     @AppStorage("checkinEnabled")  private var checkinEnabled = true
     @AppStorage("checkinTime")     private var checkinTimeStr = "08:00"
+    @AppStorage("notificationsEnabled") private var notificationsEnabled = true
+    @AppStorage("dailySummaryEnabled") private var dailySummaryEnabled = true
+    @AppStorage("dailySummaryTime") private var dailySummaryTimeStr = "20:00"
+    @AppStorage("overdueReminders") private var overdueReminders = true
 
     @State private var selectedTab: Int = 0
     @State private var showSettings = false
     @State private var showCheckIn = false
+
+    private var notificationSettingsToken: String {
+        [
+            checkinEnabled.description,
+            checkinTimeStr,
+            notificationsEnabled.description,
+            dailySummaryEnabled.description,
+            dailySummaryTimeStr,
+            overdueReminders.description
+        ].joined(separator: "|")
+    }
+
+    private var taskNotificationToken: String {
+        allTasks
+            .map { task in
+                [
+                    task.id.uuidString,
+                    task.title,
+                    task.isDone.description,
+                    task.dueDate?.ISO8601Format() ?? "nil",
+                    task.dueTime?.ISO8601Format() ?? "nil"
+                ].joined(separator: "#")
+            }
+            .sorted()
+            .joined(separator: "|")
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -51,10 +82,18 @@ struct ContentView: View {
             NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
         ) { _ in
             checkForCheckIn()
+            syncNotifications()
         }
         .onAppear {
             configureTabBar()
             checkForCheckIn()
+            syncNotifications()
+        }
+        .onChange(of: notificationSettingsToken) { _, _ in
+            syncNotifications()
+        }
+        .onChange(of: taskNotificationToken) { _, _ in
+            syncNotifications()
         }
     }
 
@@ -88,6 +127,20 @@ struct ContentView: View {
         guard let windowEnd = cal.date(byAdding: .minute, value: 30, to: checkinDate) else { return false }
 
         return now >= checkinDate && now <= windowEnd
+    }
+
+    private func syncNotifications() {
+        Task {
+            await NotificationService.shared.syncNotificationSettings(
+                checkinEnabled: checkinEnabled,
+                checkinTime: checkinTimeStr,
+                notificationsEnabled: notificationsEnabled,
+                dailySummaryEnabled: dailySummaryEnabled,
+                dailySummaryTime: dailySummaryTimeStr,
+                overdueReminders: overdueReminders,
+                tasks: allTasks
+            )
+        }
     }
 
     // MARK: - Tab Bar Appearance

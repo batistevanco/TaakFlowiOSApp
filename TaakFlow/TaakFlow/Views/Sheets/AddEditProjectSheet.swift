@@ -172,6 +172,7 @@ struct AddEditProjectSheet: View {
             .background(Color.tfBgCard)
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)
+            .dismissKeyboardOnInteraction()
         }
         .onAppear(perform: populateIfEditing)
     }

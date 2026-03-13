@@ -34,6 +34,26 @@ struct SmallTagPill: View {
     }
 }
 
+struct ProjectPillView: View {
+    let project: TFProject
+
+    var body: some View {
+        HStack(spacing: TFSpacing.xs) {
+            Text(project.emoji)
+                .font(.system(size: 11))
+            Text(project.name.uppercased())
+                .lineLimit(1)
+        }
+        .font(.tfCaption())
+        .tracking(0.4)
+        .foregroundColor(project.color)
+        .padding(.horizontal, TFSpacing.sm)
+        .padding(.vertical, 3)
+        .background(project.color.opacity(0.10))
+        .clipShape(Capsule())
+    }
+}
+
 #Preview {
     HStack {
         SmallTagPill(name: "Work", color: .tfAccent)

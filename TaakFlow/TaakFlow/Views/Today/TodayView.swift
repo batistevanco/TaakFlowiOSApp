@@ -58,11 +58,32 @@ struct TodayView: View {
         }
     }
 
-    private var morningTasks: [TFTask] { visibleScopedTasks.filter { $0.timeBlock == .morning } }
-    private var afternoonTasks: [TFTask] { visibleScopedTasks.filter { $0.timeBlock == .afternoon } }
-    private var eveningTasks: [TFTask] { visibleScopedTasks.filter { $0.timeBlock == .evening } }
+    private var openVisibleScopedTasks: [TFTask] {
+        visibleScopedTasks.filter { !$0.isDone }
+    }
+
+    private var completedTodayTasks: [TFTask] {
+        visibleScopedTasks
+            .filter(\.isDone)
+            .sorted { lhs, rhs in
+                switch (lhs.completedAt, rhs.completedAt) {
+                case (.some(let lCompleted), .some(let rCompleted)):
+                    return lCompleted > rCompleted
+                case (.some, .none):
+                    return true
+                case (.none, .some):
+                    return false
+                case (.none, .none):
+                    return lhs.createdAt > rhs.createdAt
+                }
+            }
+    }
+
+    private var morningTasks: [TFTask] { openVisibleScopedTasks.filter { $0.timeBlock == .morning } }
+    private var afternoonTasks: [TFTask] { openVisibleScopedTasks.filter { $0.timeBlock == .afternoon } }
+    private var eveningTasks: [TFTask] { openVisibleScopedTasks.filter { $0.timeBlock == .evening } }
     private var unscheduledTasks: [TFTask] {
-        visibleScopedTasks.filter { $0.timeBlock == .unscheduled }
+        openVisibleScopedTasks.filter { $0.timeBlock == .unscheduled }
     }
 
     private var completedTasks: Int { visibleScopedTasks.filter(\.isDone).count }
@@ -151,6 +172,7 @@ struct TodayView: View {
                 FABButton { showAddTask = true }
                     .padding(TFSpacing.xl)
             }
+            .dismissKeyboardOnInteraction()
         }
         .sheet(isPresented: $showAddTask) {
             AddEditTaskSheet(existingTask: nil)
@@ -267,6 +289,35 @@ struct TodayView: View {
                     onDelete: deleteTask,
                     onDuplicate: duplicateTask
                 )
+            }
+            if !completedTodayTasks.isEmpty {
+                VStack(spacing: TFSpacing.sm) {
+                    SectionHeaderView(
+                        emoji: "✅",
+                        title: "Voltooid vandaag",
+                        done: completedTodayTasks.count,
+                        total: completedTodayTasks.count
+                    )
+
+                    ForEach(Array(completedTodayTasks.enumerated()), id: \.element.id) { index, task in
+                        TaskCardView(
+                            task: task,
+                            onFocus: { taskForFocus = $0 },
+                            onEdit: { taskToEdit = $0 },
+                            onDelete: deleteTask,
+                            onDuplicate: duplicateTask
+                        )
+                        .padding(.horizontal, TFSpacing.lg)
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .bottom).combined(with: .opacity).combined(with: .scale(scale: 0.97)),
+                            removal: .move(edge: .leading).combined(with: .opacity)
+                        ))
+                        .animation(
+                            .spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.04),
+                            value: completedTodayTasks.count
+                        )
+                    }
+                }
             }
         } else {
             VStack(spacing: TFSpacing.sm) {

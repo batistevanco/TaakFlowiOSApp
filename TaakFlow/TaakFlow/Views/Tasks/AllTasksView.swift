@@ -122,6 +122,7 @@ struct AllTasksView: View {
                 }
             }
             .background(Color.tfBgPrimary)
+            .dismissKeyboardOnInteraction()
         }
         .sheet(isPresented: $showAddTask) {
             AddEditTaskSheet(existingTask: nil)

@@ -243,6 +243,7 @@ struct SettingsView: View {
                 }
             }
             .background(Color.tfBgPrimary)
+            .dismissKeyboardOnInteraction()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -252,6 +253,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .dismissKeyboardOnInteraction()
         .sheet(isPresented: $showHelp) {
             HelpView()
         }

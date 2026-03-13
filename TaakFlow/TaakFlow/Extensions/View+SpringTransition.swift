@@ -2,6 +2,7 @@
 // TaakFlow — Vancoillie Studio
 
 import SwiftUI
+import UIKit
 
 // MARK: - Custom Transitions
 
@@ -57,5 +58,26 @@ extension View {
                 UIImpactFeedbackGenerator(style: style).impactOccurred()
             }
         )
+    }
+
+    func dismissKeyboardOnInteraction() -> some View {
+        self
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    UIApplication.shared.hideKeyboard()
+                }
+            )
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 8).onChanged { _ in
+                    UIApplication.shared.hideKeyboard()
+                }
+            )
+    }
+}
+
+extension UIApplication {
+    func hideKeyboard() {
+        sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 }

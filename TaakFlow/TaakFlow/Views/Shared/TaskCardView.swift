@@ -47,9 +47,12 @@ struct TaskCardView: View {
                         }
                     }
 
-                    if !task.tags.isEmpty {
+                    if task.project != nil || !task.tags.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: TFSpacing.xs) {
+                                if let project = task.project {
+                                    ProjectPillView(project: project)
+                                }
                                 ForEach(task.tags) { tag in
                                     TagPillView(tag: tag)
                                 }

@@ -10,6 +10,11 @@ class NotificationService {
     static let shared = NotificationService()
     private init() {}
 
+    private let checkInNotificationID = "checkin-daily"
+    private let dailySummaryNotificationID = "daily-summary"
+    private let overdueReminderNotificationID = "overdue-daily"
+    private let taskReminderPrefix = "task-reminder-"
+
     // MARK: - Permission
     @discardableResult
     func requestPermission() async -> Bool {
@@ -26,7 +31,7 @@ class NotificationService {
     // MARK: - Schedule Check-in
     func scheduleCheckIn(hour: Int, minute: Int) {
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: ["checkin-daily"])
+        center.removePendingNotificationRequests(withIdentifiers: [checkInNotificationID])
 
         let content = UNMutableNotificationContent()
         content.title = "☀️ Goedemorgen!"
@@ -38,18 +43,25 @@ class NotificationService {
         components.minute = minute
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
-        let request = UNNotificationRequest(identifier: "checkin-daily", content: content, trigger: trigger)
+        let request = UNNotificationRequest(identifier: checkInNotificationID, content: content, trigger: trigger)
         center.add(request)
     }
 
     // MARK: - Task Reminder
     func scheduleTaskReminder(for task: TFTask) {
-        guard let dueTime = task.dueTime else { return }
-        guard let reminderDate = Calendar.current.date(byAdding: .minute, value: -10, to: dueTime) else { return }
+        guard let dueDate = task.dueDate, let dueTime = task.dueTime, !task.isDone else { return }
+
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: dueDate)
+        let timeComponents = Calendar.current.dateComponents([.hour, .minute], from: dueTime)
+        components.hour = timeComponents.hour
+        components.minute = timeComponents.minute
+
+        guard let scheduledDueDate = Calendar.current.date(from: components) else { return }
+        guard let reminderDate = Calendar.current.date(byAdding: .minute, value: -10, to: scheduledDueDate) else { return }
         guard reminderDate > Date() else { return }
 
         let center = UNUserNotificationCenter.current()
-        let id = "task-reminder-\(task.id)"
+        let id = "\(taskReminderPrefix)\(task.id)"
         center.removePendingNotificationRequests(withIdentifiers: [id])
 
         let content = UNMutableNotificationContent()
@@ -65,13 +77,13 @@ class NotificationService {
 
     func cancelTaskNotification(for task: TFTask) {
         UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: ["task-reminder-\(task.id)"])
+            .removePendingNotificationRequests(withIdentifiers: ["\(taskReminderPrefix)\(task.id)"])
     }
 
     // MARK: - Daily Summary
     func scheduleDailySummary(hour: Int, minute: Int) {
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: ["daily-summary"])
+        center.removePendingNotificationRequests(withIdentifiers: [dailySummaryNotificationID])
 
         let content = UNMutableNotificationContent()
         content.title = "📋 Dagoverzicht"
@@ -83,27 +95,71 @@ class NotificationService {
         components.minute = minute
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
-        let request = UNNotificationRequest(identifier: "daily-summary", content: content, trigger: trigger)
+        let request = UNNotificationRequest(identifier: dailySummaryNotificationID, content: content, trigger: trigger)
         center.add(request)
     }
 
-    // MARK: - Streak Risk
-    func scheduleStreakRisk() {
+    // MARK: - Overdue Reminder
+    func scheduleOverdueReminder(hour: Int = 9, minute: Int = 0) {
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: ["streak-risk"])
+        center.removePendingNotificationRequests(withIdentifiers: [overdueReminderNotificationID])
 
         let content = UNMutableNotificationContent()
-        content.title = "🔥 Streak gevaar!"
-        content.body = "Je streak staat op het spel! Rond een taak af."
+        content.title = "⚠️ Verlopen taken"
+        content.body = "Je hebt taken die aandacht nodig hebben."
         content.sound = .default
 
         var components = DateComponents()
-        components.hour = 21
-        components.minute = 0
+        components.hour = hour
+        components.minute = minute
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
-        let request = UNNotificationRequest(identifier: "streak-risk", content: content, trigger: trigger)
+        let request = UNNotificationRequest(identifier: overdueReminderNotificationID, content: content, trigger: trigger)
         center.add(request)
+    }
+
+    // MARK: - Sync
+    func syncNotificationSettings(
+        checkinEnabled: Bool,
+        checkinTime: String,
+        notificationsEnabled: Bool,
+        dailySummaryEnabled: Bool,
+        dailySummaryTime: String,
+        overdueReminders: Bool,
+        tasks: [TFTask]
+    ) async {
+        if !notificationsEnabled {
+            cancelNotification(id: checkInNotificationID)
+            cancelNotification(id: dailySummaryNotificationID)
+            cancelNotification(id: overdueReminderNotificationID)
+            await cancelPendingNotifications(withPrefix: taskReminderPrefix)
+            return
+        }
+
+        let authorizationStatus = await notificationAuthorizationStatus()
+        if authorizationStatus == .notDetermined {
+            _ = await requestPermission()
+        }
+
+        if checkinEnabled, let checkInTime = parseTime(checkinTime) {
+            scheduleCheckIn(hour: checkInTime.hour, minute: checkInTime.minute)
+        } else {
+            cancelNotification(id: checkInNotificationID)
+        }
+
+        if dailySummaryEnabled, let summaryTime = parseTime(dailySummaryTime) {
+            scheduleDailySummary(hour: summaryTime.hour, minute: summaryTime.minute)
+        } else {
+            cancelNotification(id: dailySummaryNotificationID)
+        }
+
+        if overdueReminders && tasks.contains(where: \.isOverdue) {
+            scheduleOverdueReminder()
+        } else {
+            cancelNotification(id: overdueReminderNotificationID)
+        }
+
+        await syncTaskReminders(for: tasks, enabled: notificationsEnabled)
     }
 
     // MARK: - Cancel all
@@ -114,5 +170,47 @@ class NotificationService {
     func cancelNotification(id: String) {
         UNUserNotificationCenter.current()
             .removePendingNotificationRequests(withIdentifiers: [id])
+    }
+
+    private func syncTaskReminders(for tasks: [TFTask], enabled: Bool) async {
+        await cancelPendingNotifications(withPrefix: taskReminderPrefix)
+
+        guard enabled else { return }
+        for task in tasks {
+            scheduleTaskReminder(for: task)
+        }
+    }
+
+    private func cancelPendingNotifications(withPrefix prefix: String) async {
+        let center = UNUserNotificationCenter.current()
+        let pendingRequests = await pendingNotificationRequests()
+        let ids = pendingRequests
+            .map(\.identifier)
+            .filter { $0.hasPrefix(prefix) }
+        center.removePendingNotificationRequests(withIdentifiers: ids)
+    }
+
+    private func pendingNotificationRequests() async -> [UNNotificationRequest] {
+        await withCheckedContinuation { continuation in
+            UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+                continuation.resume(returning: requests)
+            }
+        }
+    }
+
+    private func notificationAuthorizationStatus() async -> UNAuthorizationStatus {
+        await withCheckedContinuation { continuation in
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                continuation.resume(returning: settings.authorizationStatus)
+            }
+        }
+    }
+
+    private func parseTime(_ value: String) -> (hour: Int, minute: Int)? {
+        let parts = value.split(separator: ":")
+        guard parts.count == 2,
+              let hour = Int(parts[0]),
+              let minute = Int(parts[1]) else { return nil }
+        return (hour, minute)
     }
 }
