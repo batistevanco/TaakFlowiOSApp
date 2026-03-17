@@ -119,6 +119,7 @@ struct AllTasksView: View {
                         }
                         .padding(.top, TFSpacing.md)
                     }
+                    .scrollDismissesKeyboard(.interactively)
                 }
             }
             .background(Color.tfBgPrimary)

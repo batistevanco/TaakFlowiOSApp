@@ -242,6 +242,7 @@ struct SettingsView: View {
                     Spacer(minLength: 100)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(Color.tfBgPrimary)
             .dismissKeyboardOnInteraction()
             .navigationBarTitleDisplayMode(.inline)

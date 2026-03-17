@@ -8,10 +8,6 @@ struct MorningCheckInView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
 
-    @AppStorage("currentStreak") private var currentStreak = 0
-    @AppStorage("longestStreak") private var longestStreak = 0
-    @AppStorage("lastStreakDate") private var lastStreakDate = ""
-
     @State private var viewModel = CheckInViewModel()
     @State private var showConfetti = false
 
@@ -112,28 +108,6 @@ struct MorningCheckInView: View {
     private func completeCheckIn() {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         viewModel.saveCheckIn(context: context)
-
-        // Update streak
-        let today = {
-            let f = DateFormatter()
-            f.dateFormat = "yyyy-MM-dd"
-            return f.string(from: Date())
-        }()
-        if lastStreakDate != today {
-            let yesterday = {
-                let f = DateFormatter()
-                f.dateFormat = "yyyy-MM-dd"
-                let d = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
-                return f.string(from: d)
-            }()
-            if lastStreakDate == yesterday {
-                currentStreak += 1
-            } else {
-                currentStreak = 1
-            }
-            if currentStreak > longestStreak { longestStreak = currentStreak }
-            lastStreakDate = today
-        }
 
         withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
             showConfetti = true

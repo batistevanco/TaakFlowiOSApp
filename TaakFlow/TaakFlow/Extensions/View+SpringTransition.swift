@@ -68,11 +68,6 @@ extension View {
                     UIApplication.shared.hideKeyboard()
                 }
             )
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 8).onChanged { _ in
-                    UIApplication.shared.hideKeyboard()
-                }
-            )
     }
 }
 

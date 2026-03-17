@@ -166,6 +166,7 @@ struct TodayView: View {
                     }
                     .padding(.top, TFSpacing.lg)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .background(Color.tfBgPrimary)
 
                 // FAB

@@ -45,6 +45,18 @@ struct ContentView: View {
             .joined(separator: "|")
     }
 
+    private var streakTaskToken: String {
+        allTasks
+            .map { task in
+                [
+                    task.id.uuidString,
+                    task.completedAt?.ISO8601Format() ?? "nil"
+                ].joined(separator: "#")
+            }
+            .sorted()
+            .joined(separator: "|")
+    }
+
     var body: some View {
         TabView(selection: $selectedTab) {
             TodayView(onOpenSettings: { showSettings = true })
@@ -83,17 +95,22 @@ struct ContentView: View {
         ) { _ in
             checkForCheckIn()
             syncNotifications()
+            syncStreak()
         }
         .onAppear {
             configureTabBar()
             checkForCheckIn()
             syncNotifications()
+            syncStreak()
         }
         .onChange(of: notificationSettingsToken) { _, _ in
             syncNotifications()
         }
         .onChange(of: taskNotificationToken) { _, _ in
             syncNotifications()
+        }
+        .onChange(of: streakTaskToken) { _, _ in
+            syncStreak()
         }
     }
 
@@ -141,6 +158,10 @@ struct ContentView: View {
                 tasks: allTasks
             )
         }
+    }
+
+    private func syncStreak() {
+        StreakService.shared.syncStreak(tasks: allTasks)
     }
 
     // MARK: - Tab Bar Appearance

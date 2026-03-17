@@ -10,7 +10,6 @@ struct FocusModeView: View {
 
     @Bindable var task: TFTask
 
-    @AppStorage("pomodoroMinutes")    private var pomodoroMinutes    = 25
     @AppStorage("shortBreakMinutes")  private var shortBreakMinutes  = 5
     @AppStorage("longBreakMinutes")   private var longBreakMinutes   = 15
 
@@ -20,11 +19,11 @@ struct FocusModeView: View {
 
     init(task: TFTask) {
         self.task = task
-        let pomodoroMinutes = UserDefaults.standard.integer(forKey: "pomodoroMinutes")
         let shortBreak = UserDefaults.standard.integer(forKey: "shortBreakMinutes")
         let longBreak = UserDefaults.standard.integer(forKey: "longBreakMinutes")
+        let workMinutes = task.estimatedMinutes ?? 25
         _timer = State(initialValue: PomodoroTimer(
-            workMinutes: pomodoroMinutes > 0 ? pomodoroMinutes : 25,
+            workMinutes: workMinutes > 0 ? workMinutes : 25,
             shortBreakMinutes: shortBreak > 0 ? shortBreak : 5,
             longBreakMinutes: longBreak > 0 ? longBreak : 15
         ))

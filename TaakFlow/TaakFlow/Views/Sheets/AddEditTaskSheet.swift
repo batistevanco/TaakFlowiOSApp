@@ -183,6 +183,7 @@ struct AddEditTaskSheet: View {
                     .padding(.bottom, TFSpacing.xxxl)
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .background(Color.tfBgCard)
             .presentationDetents([.large])
             .presentationDragIndicator(.hidden)
