@@ -28,6 +28,7 @@ struct SettingsView: View {
 
     @AppStorage("currentStreak")        private var currentStreak = 0
     @AppStorage("longestStreak")        private var longestStreak = 0
+    @AppStorage("defaultTaskScope")     private var defaultScopeRaw = TodayTaskScope.today.rawValue
 
     @State private var showResetAlert = false
     @State private var showAbout = false
@@ -73,6 +74,8 @@ struct SettingsView: View {
 
                     // MARK: Planning (check-in + meldingen)
                     settingsSection("Planning") {
+                        defaultScopeRow
+                        Divider().padding(.leading, TFSpacing.lg)
                         toggleRow(title: "Ochtend check-in", subtitle: "Dagelijkse vragenlijst bij opstart", isOn: $checkinEnabled)
                         if checkinEnabled {
                             Divider().padding(.leading, TFSpacing.lg)
@@ -177,9 +180,14 @@ struct SettingsView: View {
                                 .font(.tfSubheadline())
                                 .foregroundColor(.tfTextPrimary)
                             Spacer()
-                            Text("v1.0")
-                                .font(.tfCaption2())
-                                .foregroundColor(.tfTextSecondary)
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–")")
+                                    .font(.tfCaption2())
+                                    .foregroundColor(.tfTextSecondary)
+                                Text("build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "–")")
+                                    .font(.tfCaption2())
+                                    .foregroundColor(.tfTextSecondary)
+                            }
                         }
                         .padding(.horizontal, TFSpacing.lg)
                         .padding(.vertical, TFSpacing.md)
@@ -278,6 +286,37 @@ struct SettingsView: View {
         longestStreak = 0
         UserDefaults.standard.removeObject(forKey: "lastStreakDate")
         userName = ""
+    }
+
+    @ViewBuilder
+    private var defaultScopeRow: some View {
+        VStack(alignment: .leading, spacing: TFSpacing.sm) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Standaard filter")
+                    .font(.tfSubheadline())
+                    .foregroundColor(.tfTextPrimary)
+                Text("Welke weergave bij het openen van de app")
+                    .font(.tfCaption2())
+                    .foregroundColor(.tfTextSecondary)
+            }
+            HStack(spacing: TFSpacing.sm) {
+                ForEach(TodayTaskScope.allCases) { scope in
+                    Button(action: { defaultScopeRaw = scope.rawValue }) {
+                        Text(scope.rawValue)
+                            .font(.tfCaption())
+                            .foregroundColor(defaultScopeRaw == scope.rawValue ? .white : .tfTextSecondary)
+                            .padding(.horizontal, TFSpacing.md)
+                            .padding(.vertical, TFSpacing.sm)
+                            .frame(maxWidth: .infinity)
+                            .background(defaultScopeRaw == scope.rawValue ? Color.tfAccent : Color.tfBgSubtle)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(SpringButtonStyle())
+                }
+            }
+        }
+        .padding(.horizontal, TFSpacing.lg)
+        .padding(.vertical, TFSpacing.md)
     }
 
     @ViewBuilder

@@ -4,7 +4,7 @@
 import SwiftUI
 import SwiftData
 
-private enum TodayTaskScope: String, CaseIterable, Identifiable {
+enum TodayTaskScope: String, CaseIterable, Identifiable {
     case today = "Vandaag"
     case all = "Alle"
     case overdue = "Verlopen"
@@ -19,6 +19,7 @@ struct TodayView: View {
 
     @AppStorage("userName") private var userName = ""
     @AppStorage("currentStreak") private var currentStreak = 0
+    @AppStorage("defaultTaskScope") private var defaultScopeRaw = TodayTaskScope.today.rawValue
 
     @State private var showAddTask = false
     @State private var taskToEdit: TFTask? = nil
@@ -206,6 +207,7 @@ struct TodayView: View {
             FocusModeView(task: task)
         }
         .onAppear {
+            selectedScope = TodayTaskScope(rawValue: defaultScopeRaw) ?? .today
             applyAutomaticFallbackScope()
         }
         .onChange(of: scopeFallbackToken) { _, _ in
