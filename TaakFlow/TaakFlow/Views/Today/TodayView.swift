@@ -27,12 +27,33 @@ struct TodayView: View {
     @State private var searchText = ""
     var onOpenSettings: (() -> Void)
 
+    private var scopeFallbackToken: String {
+        allTasks
+            .map { task in
+                [
+                    task.id.uuidString,
+                    task.isDone.description,
+                    task.dueDate?.ISO8601Format() ?? "nil"
+                ].joined(separator: "#")
+            }
+            .sorted()
+            .joined(separator: "|")
+    }
+
     // MARK: - Computed
     private var todayTasks: [TFTask] {
         sortedTasks(allTasks.filter { task in
             guard let due = task.dueDate else { return false }
             return due.isToday
         })
+    }
+
+    private var hasFallbackTasksOutsideToday: Bool {
+        allTasks.contains { task in
+            guard !task.isDone else { return false }
+            guard let dueDate = task.dueDate else { return true }
+            return !dueDate.isToday
+        }
     }
 
     private var overdueTasks: [TFTask] {
@@ -183,6 +204,12 @@ struct TodayView: View {
         }
         .fullScreenCover(item: $taskForFocus) { task in
             FocusModeView(task: task)
+        }
+        .onAppear {
+            applyAutomaticFallbackScope()
+        }
+        .onChange(of: scopeFallbackToken) { _, _ in
+            applyAutomaticFallbackScope()
         }
     }
 
@@ -430,5 +457,12 @@ struct TodayView: View {
             }
             return lhs.createdAt > rhs.createdAt
         }
+    }
+
+    private func applyAutomaticFallbackScope() {
+        guard selectedScope == .today else { return }
+        guard todayTasks.isEmpty else { return }
+        guard hasFallbackTasksOutsideToday else { return }
+        selectedScope = .all
     }
 }
